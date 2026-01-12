@@ -10,6 +10,8 @@ import { REST, Routes, ActivityType } from "discord.js"; // <-- import ActivityT
 import { recordPostsFromMessages } from "./analytics/analyticsStore.js";
 import { recordActivityFromMessages } from "./analytics/activityStats.js";
 
+import express from "express"; // <-- added Express
+
 // ----------------------------
 // Register slash commands
 // ----------------------------
@@ -44,27 +46,21 @@ const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
-  // ----------------------------
-  // Set bot presence/status
-  // ----------------------------
   try {
     await client.user.setPresence({
       activities: [
         {
           name: "RAV Media Archive",
-          type: ActivityType.Watching // Watching
+          type: ActivityType.Watching
         }
       ],
-      status: "online" // online, idle, dnd, invisible
+      status: "online"
     });
     console.log("✅ Bot presence set to Watching RAV submissions");
   } catch (err) {
     console.warn("❌ Could not set presence:", err);
   }
 
-  // ----------------------------
-  // Fetch all messages from source channel and record stats
-  // ----------------------------
   try {
     const sourceChannel = await client.channels.fetch(process.env.SOURCE_CHANNEL_ID);
 
@@ -99,3 +95,15 @@ client.on("interactionCreate", handleInteraction);
 // Login
 // ----------------------------
 client.login(process.env.DISCORD_TOKEN);
+
+// ----------------------------
+// Tiny web server to keep bot alive
+// ----------------------------
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => res.send("Bot is alive!"));
+
+app.listen(PORT, () => {
+  console.log(`🌐 Web server running on port ${PORT} - ready for UptimeRobot pings`);
+});
