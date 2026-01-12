@@ -16,6 +16,14 @@ export const ravLeaderboardCommand = {
   async execute(interaction) {
     await interaction.deferReply();
 
+    // Allowed channels
+    const ALLOWED_CHANNELS = ["1361026129300815993", "1459687645629386836"]; // replace with your channel IDs
+    if (!ALLOWED_CHANNELS.includes(interaction.channelId)) {
+      return interaction.editReply({
+        content: "This command can only be used in the designated channels."
+      });
+    }
+
     // Determine month key
     let monthKey = interaction.options.getString("month");
     if (!monthKey) {
@@ -31,16 +39,13 @@ export const ravLeaderboardCommand = {
 
     // Fetch leaderboard
     const leaderboard = await getLeaderboard(monthKey, interaction.guildId);
-
     if (!leaderboard.length) {
       return interaction.editReply(`No posts found for ${monthKey}.`);
     }
 
-    // Generate dual leaderboard image
     const buffer = await generateDualLeaderboardImage(leaderboard, monthKey);
     const attachment = new AttachmentBuilder(buffer, { name: "leaderboard.png" });
 
-    // Embed
     const embed = new EmbedBuilder()
       .setTitle(`Rapid Assault Vanguard Leaderboard`)
       .setColor(0xA2C6CA)

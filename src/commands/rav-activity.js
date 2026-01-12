@@ -14,8 +14,16 @@ export const ravActivityCommand = {
     ),
 
   async execute(interaction) {
-    let monthKey = interaction.options.getString("month");
+    // Allowed channels
+    const ALLOWED_CHANNELS = ["1361026129300815993", "1459687645629386836"]; // replace with your channel IDs
+    if (!ALLOWED_CHANNELS.includes(interaction.channelId)) {
+      return interaction.reply({
+        content: "This command can only be used in the designated channels.",
+        ephemeral: true
+      });
+    }
 
+    let monthKey = interaction.options.getString("month");
     if (!monthKey) {
       const now = new Date();
       let year = now.getFullYear();
@@ -25,9 +33,7 @@ export const ravActivityCommand = {
     }
 
     const stats = activityStats["all"];
-if (!stats) {
-  return interaction.reply("No activity data recorded yet.");
-}
+    if (!stats) return interaction.reply("No activity data recorded yet.");
 
     const buffer = await generateActivityImage(stats, monthKey);
     const attachment = new AttachmentBuilder(buffer, { name: "activity.png" });
@@ -40,3 +46,4 @@ if (!stats) {
     await interaction.reply({ embeds: [embed], files: [attachment] });
   }
 };
+
