@@ -1,0 +1,163 @@
+import { createCanvas, loadImage } from "canvas";
+import { formatRavMonth } from "../ui/formatRavMonth.js";
+
+export async function generateDualLeaderboardImage(leaderboard, monthKey) {
+  const width = 1600;
+  const height = 800;
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+
+  /* -------------------- Background -------------------- */
+  const bg = ctx.createLinearGradient(0, 0, 0, height);
+  bg.addColorStop(0, "#1e1f24");
+  bg.addColorStop(1, "#14151a");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+
+  /* -------------------- Title -------------------- */
+  ctx.fillStyle = "#a2C6Ca";
+  ctx.font = "bold 44px 'Times New Roman'";
+  ctx.textAlign = "left";
+  const dateRangeStr = formatRavMonth(monthKey);
+  ctx.fillText(`RAV Leaderboard | ${dateRangeStr}`, 50, 60);
+
+  /* -------------------- Left graph: Posts per author -------------------- */
+  const leftX = 50;
+  const leftY = 120;
+  const leftWidth = 600;
+  const leftHeight = 400;
+
+  const authorsOnly = leaderboard.filter(u => u.total > 0);
+  const maxTotal = Math.max(...authorsOnly.map(u => u.total)) || 1;
+
+  ctx.strokeStyle = "#444";
+  ctx.lineWidth = 1;
+  ctx.font = "14px 'Times New Roman'";
+  ctx.fillStyle = "#ccc";
+  for (let i = 0; i <= maxTotal; i += Math.ceil(maxTotal / 5)) {
+    const y = leftY + leftHeight - (i / maxTotal) * leftHeight;
+    ctx.beginPath();
+    ctx.moveTo(leftX - 30, y);
+    ctx.lineTo(leftX + leftWidth, y);
+    ctx.stroke();
+    ctx.fillText(i, leftX - 40, y + 5);
+  }
+
+  const barWidth = 50;
+  const gap = 30;
+
+  authorsOnly.forEach((u, idx) => {
+    const barHeight = (u.total / maxTotal) * leftHeight;
+    const x = leftX + idx * (barWidth + gap);
+    const y = leftY + leftHeight - barHeight;
+
+    const gradient = ctx.createLinearGradient(x, y, x, y + barHeight);
+    gradient.addColorStop(0, "#00ffff");
+    gradient.addColorStop(1, "#0066ff");
+    ctx.fillStyle = gradient;
+    ctx.shadowColor = "rgba(0,0,0,0.4)";
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 4;
+    ctx.fillRect(x, y, barWidth, barHeight);
+    ctx.shadowColor = "transparent";
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 18px 'Times New Roman'";
+    ctx.textAlign = "center";
+    ctx.fillText(u.total, x + barWidth / 2, y - 10);
+
+    ctx.save();
+    ctx.translate(x + barWidth / 2, leftY + leftHeight + 40);
+    ctx.rotate(-Math.PI / 4);
+    ctx.font = "16px 'Times New Roman'";
+    ctx.fillStyle = "#ddd";
+    ctx.textAlign = "right";
+    ctx.fillText(u.displayName, 0, 0);
+    ctx.restore();
+  });
+
+  /* -------------------- Right table -------------------- */
+  const rightX = 800;
+  const rightY = 200;
+  const rowHeight = 40;
+  const colWidths = [250, 100, 100, 100, 100];
+  const tableWidth = colWidths.reduce((a, b) => a + b, 0);
+
+  ctx.fillStyle = "#a2C6Ca";
+  ctx.font = "bold 24px 'Times New Roman'";
+  ctx.textAlign = "center";
+  ctx.fillText("Members participation count", rightX + tableWidth / 2, rightY - 80);
+
+  const typeColors = {
+    misc: "#4ade80",
+    event: "#60a5fa",
+    rp: "#facc15",
+    raid: "#f87171"
+  };
+
+  ctx.font = "bold 18px 'Times New Roman'";
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+
+  const headers = ["User", "Misc", "Event", "RP", "Raid"];
+  let xOffset = rightX;
+  headers.forEach((header, idx) => {
+    ctx.fillText(header, xOffset + colWidths[idx] / 2, rightY - 10);
+    xOffset += colWidths[idx];
+  });
+
+  ctx.font = "16px 'Times New Roman'";
+  let displayedIdx = 0;
+
+  leaderboard.forEach(u => {
+    const hasActivity = ["misc","rp","raid","event"].some(type => {
+      if(type === "event") return (u.counts.event || 0) > 0;
+      return (u.contributors[type]?.length || 0) > 0;
+    });
+    if(!hasActivity) return;
+
+    const y = rightY + displayedIdx * rowHeight;
+
+    ctx.fillStyle = displayedIdx % 2 === 0 ? "rgba(255,255,255,0.07)" : "transparent";
+    ctx.fillRect(rightX - 20, y, tableWidth, rowHeight);
+
+    ctx.strokeStyle = "rgba(255,255,255,0.1)";
+    ctx.lineWidth = 1;
+    let lineX = rightX - 20;
+    colWidths.forEach(width => {
+      ctx.beginPath();
+      ctx.moveTo(lineX, y);
+      ctx.lineTo(lineX, y + rowHeight);
+      ctx.stroke();
+      lineX += width;
+    });
+    ctx.beginPath();
+    ctx.moveTo(rightX - 20 + tableWidth, y);
+    ctx.lineTo(rightX - 20 + tableWidth, y + rowHeight);
+    ctx.stroke();
+
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+    ctx.fillText(u.displayName, rightX + colWidths[0]/2, y + 28);
+
+    let xOffset = rightX + colWidths[0];
+    ["misc","event","rp","raid"].forEach((type, i) => {
+  // Use total counts, not unique contributors
+  const count = u.counts[type] || 0;
+  ctx.fillStyle = typeColors[type];
+  ctx.fillText(count.toString(), xOffset + colWidths[i + 1]/2, y + 28);
+  xOffset += colWidths[i + 1];
+});
+
+
+    displayedIdx++;
+  });
+
+  /* -------------------- Footer -------------------- */
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#888";
+  ctx.font = "14px 'Times New Roman'";
+  ctx.fillText("Generated by RAV Media Manager", width / 2, height - 30);
+
+  return canvas.toBuffer();
+}
