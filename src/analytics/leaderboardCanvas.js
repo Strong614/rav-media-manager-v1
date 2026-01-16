@@ -55,16 +55,15 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     total: "#00ffff"
   };
 
-  // Calculate bar width per user group
+  // Bar width per user
   const groupWidth = leftWidth / Math.max(numUsers, 1);
   const internalGap = 5;
-  const barWidth = (groupWidth - internalGap * 3) / 4; // 4 bars per group
+  const barWidth = (groupWidth - internalGap * 3) / 4; // 4 bars per user
 
   authorsOnly.forEach((u, idx) => {
     const startX = leftX + idx * groupWidth + internalGap / 2;
     const yBottom = leftY + leftHeight;
 
-    // Glow for top contributor
     if (u.total === maxTotal) {
       ctx.save();
       ctx.shadowColor = "rgba(255,255,255,0.4)";
@@ -126,9 +125,9 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   const tableY = 200;
   const tableWidth = Math.floor(width * 0.48);
   const rowHeight = 40;
-  const colRatios = [0.12, 0.28, 0.125, 0.125, 0.125, 0.125, 0.12];
+  const colRatios = [0.4, 0.125, 0.125, 0.125, 0.125, 0.12]; // removed rank column
   const colWidths = colRatios.map(r => Math.floor(tableWidth * r));
-  const headers = ["#", "User", "Misc", "Event", "RP", "Raid", "Total"];
+  const headers = ["User", "Misc", "Event", "RP", "Raid", "Total"];
 
   ctx.fillStyle = "#a2C6Ca";
   ctx.font = "bold 24px 'Times New Roman'";
@@ -186,27 +185,23 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
       ctx.stroke();
     });
 
-    // Rank + username
+    // Username with rank merged
     let cx = tableX;
-    ctx.fillStyle = "#cbd5f5";
-    ctx.textAlign = "center";
-    ctx.fillText(`#${i + 1}`, cx + colWidths[0] / 2, y + 28);
-    cx += colWidths[0];
-
     ctx.fillStyle = "#fff";
-    ctx.fillText(u.displayName || "", cx + colWidths[1] / 2, y + 28);
-    cx += colWidths[1];
+    ctx.textAlign = "center";
+    ctx.fillText(`#${i + 1} ${u.displayName || ""}`, cx + colWidths[0] / 2, y + 28);
+    cx += colWidths[0];
 
     // Counts centered
     ["misc", "event", "rp", "raid"].forEach((t, idx) => {
       ctx.fillStyle = typeColors[t];
-      ctx.fillText(u.counts[t] || 0, cx + colWidths[idx + 2] / 2, y + 28);
-      cx += colWidths[idx + 2];
+      ctx.fillText(u.counts[t] || 0, cx + colWidths[idx + 1] / 2, y + 28);
+      cx += colWidths[idx + 1];
     });
 
     // Total column
     ctx.fillStyle = typeColors.total;
-    ctx.fillText(u.__total, cx + colWidths[6] / 2, y + 28);
+    ctx.fillText(u.__total, cx + colWidths[5] / 2, y + 28);
 
     rowIdx++;
   });
@@ -221,18 +216,16 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   ctx.fillStyle = "#fff";
 
   ctx.textAlign = "center";
-  ctx.fillText("—", cx + colWidths[0] / 2, yTotal + 28);
+  ctx.fillText("TOTAL", cx + colWidths[0] / 2, yTotal + 28);
   cx += colWidths[0];
-  ctx.fillText("TOTAL", cx + colWidths[1] / 2, yTotal + 28);
-  cx += colWidths[1];
 
   ["misc", "event", "rp", "raid"].forEach((t, idx) => {
     ctx.fillStyle = typeColors[t];
-    ctx.fillText(globalTotals[t], cx + colWidths[idx + 2] / 2, yTotal + 28);
-    cx += colWidths[idx + 2];
+    ctx.fillText(globalTotals[t], cx + colWidths[idx + 1] / 2, yTotal + 28);
+    cx += colWidths[idx + 1];
   });
   ctx.fillStyle = typeColors.total;
-  ctx.fillText(globalTotals.total, cx + colWidths[6] / 2, yTotal + 28);
+  ctx.fillText(globalTotals.total, cx + colWidths[5] / 2, yTotal + 28);
 
   /* -------------------- Footer -------------------- */
   ctx.textAlign = "center";
