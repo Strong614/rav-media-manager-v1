@@ -1,9 +1,13 @@
-import { createCanvas } from "canvas";
+import { createCanvas, loadImage } from "canvas";
 import { formatRavMonth } from "../ui/formatRavMonth.js";
 
 export async function generateActivityImage(stats, monthKey) {
   const width = 2000;
   const height = 1000;
+
+  const chartAreaWidth = Math.floor(width * 0.6);
+  const tableAreaWidth = width - chartAreaWidth;
+
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
 
@@ -29,7 +33,7 @@ export async function generateActivityImage(stats, monthKey) {
   ctx.lineTo(width - 50, 80);
   ctx.stroke();
 
-  /* ───── Prepare entries & sort descending ───── */
+  /* ───── Data prep ───── */
   const entries = [
     { label: "Misc", value: stats.misc },
     { label: "Events", value: stats.event },
@@ -38,29 +42,29 @@ export async function generateActivityImage(stats, monthKey) {
   ];
 
   entries.sort((a, b) => b.value - a.value);
-  const total = entries.reduce((acc, e) => acc + e.value, 0);
+  const total = entries.reduce((a, b) => a + b.value, 0);
 
-  /* ───── Grid lines ───── */
+  /* ───── Grid lines (chart only) ───── */
   const max = Math.max(...entries.map(e => e.value), 1);
+  const baseY = 620;
+  const chartHeight = 360;
+
   ctx.strokeStyle = "rgba(255,255,255,0.12)";
   ctx.lineWidth = 1;
   ctx.font = "14px 'Times New Roman'";
   ctx.fillStyle = "#bbb";
 
-  const baseY = 620;           // ⬇ diagram moved down
-  const chartHeight = 360;
-
-  const step = Math.ceil(max / 5) || 1;
+  const step = Math.ceil(max / 5);
   for (let i = 0; i <= max; i += step) {
     const y = baseY - (i / max) * chartHeight;
     ctx.beginPath();
     ctx.moveTo(80, y);
-    ctx.lineTo(width - 60, y);
+    ctx.lineTo(chartAreaWidth - 60, y);
     ctx.stroke();
     ctx.fillText(i, 50, y + 5);
   }
 
-  /* ───── Draw bars ───── */
+  /* ───── Bars ───── */
   const barWidth = 120;
   const gap = 80;
   const startX = 120;
@@ -71,20 +75,14 @@ export async function generateActivityImage(stats, monthKey) {
     const x = startX + i * (barWidth + gap);
     const y = baseY - barHeight;
 
-    /* Cyan / blue gradient */
     const gradient = ctx.createLinearGradient(x, y, x, baseY);
     gradient.addColorStop(0, "#67e8f9");
     gradient.addColorStop(1, "#0891b2");
     ctx.fillStyle = gradient;
 
-    /* Highlight highest bar */
-    if (e.value === maxValue) {
-      ctx.shadowColor = "rgba(255,255,255,0.35)";
-      ctx.shadowBlur = 18;
-    } else {
-      ctx.shadowColor = "rgba(0,0,0,0.4)";
-      ctx.shadowBlur = 10;
-    }
+    ctx.shadowColor =
+      e.value === maxValue ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.4)";
+    ctx.shadowBlur = e.value === maxValue ? 18 : 10;
     ctx.shadowOffsetY = 5;
 
     ctx.beginPath();
@@ -92,13 +90,11 @@ export async function generateActivityImage(stats, monthKey) {
     ctx.fill();
     ctx.shadowColor = "transparent";
 
-    /* Value label */
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = "#fff";
     ctx.font = "bold 22px 'Times New Roman'";
     ctx.textAlign = "center";
     ctx.fillText(e.value, x + barWidth / 2, y - 10);
 
-    /* Category label */
     ctx.save();
     ctx.translate(x + barWidth / 2, baseY + 52);
     ctx.rotate(-Math.PI / 6);
@@ -109,46 +105,45 @@ export async function generateActivityImage(stats, monthKey) {
     ctx.restore();
   });
 
-  /* ───── Total summary card ───── */
-  ctx.fillStyle = "rgba(255,255,255,0.08)";
-  ctx.fillRect(width - 420, 95, 360, 70);
+  /* ───── Vertical separator ───── */
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(chartAreaWidth, 100);
+  ctx.lineTo(chartAreaWidth, height - 80);
+  ctx.stroke();
 
-  ctx.textAlign = "center";
+  /* ───── Summary card ───── */
+  ctx.fillStyle = "rgba(255,255,255,0.08)";
+  ctx.fillRect(chartAreaWidth + 80, 95, tableAreaWidth - 160, 70);
+
   ctx.fillStyle = "#22d3ee";
   ctx.font = "bold 26px 'Times New Roman'";
-  ctx.fillText("Total Posts", width - 240, 120);
+  ctx.textAlign = "center";
+  ctx.fillText("Total Posts", chartAreaWidth + tableAreaWidth / 2, 120);
 
   ctx.font = "bold 34px 'Times New Roman'";
-  ctx.fillText(total, width - 240, 155);
+  ctx.fillText(total, chartAreaWidth + tableAreaWidth / 2, 155);
 
-    /* ───── Summary table (right side, structured like mockup) ───── */
-  const tableX = width - 900;
+    /* ───── Load logo ───── */
+  const logo = await loadImage("./assets/rav_logo.png"); // adjust path if needed
+
+
+  /* ───── Table (transparent, aligned) ───── */
+  const tableX = chartAreaWidth + 40;
   const tableY = 190;
-  const labelColWidth = 360;
-  const valueColWidth = 140;
-  const imageColWidth = 360;
-  const rowHeight = 90;
+  const rowHeight = 80;
 
-  const rows = [
-    ...entries,
-    { label: "Total Posts", value: total, isTotal: true }
-  ];
+  const labelColWidth = Math.floor(tableAreaWidth * 0.45);
+  const valueColWidth = Math.floor(tableAreaWidth * 0.2);
+  const imageColWidth = Math.floor(tableAreaWidth * 0.35);
 
+  const rows = [...entries, { label: "Total Posts", value: total, isTotal: true }];
   const tableHeight = rows.length * rowHeight;
 
-  /* White background */
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(
-    tableX,
-    tableY,
-    labelColWidth + valueColWidth + imageColWidth,
-    tableHeight
-  );
+  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+  ctx.lineWidth = 1.5;
 
-  ctx.strokeStyle = "#000000";
-  ctx.lineWidth = 2;
-
-  /* Vertical separators */
   ctx.beginPath();
   ctx.moveTo(tableX + labelColWidth, tableY);
   ctx.lineTo(tableX + labelColWidth, tableY + tableHeight);
@@ -156,7 +151,6 @@ export async function generateActivityImage(stats, monthKey) {
   ctx.lineTo(tableX + labelColWidth + valueColWidth, tableY + tableHeight);
   ctx.stroke();
 
-  /* Horizontal lines (left + middle columns only) */
   rows.forEach((_, i) => {
     const y = tableY + i * rowHeight;
     ctx.beginPath();
@@ -165,7 +159,6 @@ export async function generateActivityImage(stats, monthKey) {
     ctx.stroke();
   });
 
-  /* Outer border */
   ctx.strokeRect(
     tableX,
     tableY,
@@ -173,39 +166,49 @@ export async function generateActivityImage(stats, monthKey) {
     tableHeight
   );
 
-  /* Cell text */
-  rows.forEach((row, i) => {
-    const centerY = tableY + i * rowHeight + rowHeight / 2 + 10;
+rows.forEach((row, i) => {
+  const centerY = tableY + i * rowHeight + rowHeight / 2;
 
-    ctx.font = row.isTotal
-      ? "bold 34px 'Times New Roman'"
-      : "32px 'Times New Roman'";
+  ctx.font = row.isTotal
+    ? "bold 34px 'Times New Roman'"
+    : "32px 'Times New Roman'";
+  ctx.fillStyle = row.isTotal ? "#22d3ee" : "#ffffff";
 
-    ctx.fillStyle = row.isTotal ? "#2f5d1e" : "#000000";
+  /* Label */
+  ctx.textAlign = "left";
+  ctx.fillText(row.label, tableX + 30, centerY + 10);
 
-    /* Label */
-    ctx.textAlign = "left";
-    ctx.fillText(row.label, tableX + 30, centerY);
-
-    /* Value */
-    ctx.textAlign = "center";
-    ctx.fillText(
-      row.value,
-      tableX + labelColWidth + valueColWidth / 2,
-      centerY
-    );
-  });
-
-  /* Optional placeholder for image panel (keeps layout exact) */
-  ctx.strokeStyle = "rgba(0,0,0,0.2)";
-  ctx.setLineDash([10, 6]);
-  ctx.strokeRect(
-    tableX + labelColWidth + valueColWidth + 20,
-    tableY + 20,
-    imageColWidth - 40,
-    tableHeight - 40
+  /* Value */
+  ctx.textAlign = "center";
+  ctx.fillText(
+    row.value,
+    tableX + labelColWidth + valueColWidth / 2,
+    centerY + 10
   );
-  ctx.setLineDash([]);
+
+  /* Logo column */
+  if (!row.isTotal) {
+    const maxSize = rowHeight - 20;
+    const scale = Math.min(
+      maxSize / logo.width,
+      maxSize / logo.height
+    );
+
+    const drawW = logo.width * scale;
+    const drawH = logo.height * scale;
+
+    const logoX =
+      tableX +
+      labelColWidth +
+      valueColWidth +
+      imageColWidth / 2 -
+      drawW / 2;
+
+    const logoY = centerY - drawH / 2;
+
+    ctx.drawImage(logo, logoX, logoY, drawW, drawH);
+  }
+});
 
 
   /* ───── Footer ───── */
