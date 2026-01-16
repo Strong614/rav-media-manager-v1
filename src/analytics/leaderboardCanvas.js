@@ -78,13 +78,11 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   });
 
   /* -------------------- Table -------------------- */
-
   const tableX = Math.floor(width * 0.45);
   const tableY = 200;
   const tableWidth = Math.floor(width * 0.52);
   const rowHeight = 40;
 
-  // # | User | Misc | Event | RP | Raid | TOTAL
   const colRatios = [0.08, 0.30, 0.125, 0.125, 0.125, 0.125, 0.12];
   const colWidths = colRatios.map(r => Math.floor(tableWidth * r));
 
@@ -113,15 +111,15 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   };
 
   /* -------- sort + totals -------- */
-
   const sorted = leaderboard
     .map(u => ({
       ...u,
+      counts: u.counts || {},
       __total:
-        (u.counts.misc || 0) +
-        (u.counts.event || 0) +
-        (u.counts.rp || 0) +
-        (u.counts.raid || 0)
+        (u.counts?.misc || 0) +
+        (u.counts?.event || 0) +
+        (u.counts?.rp || 0) +
+        (u.counts?.raid || 0)
     }))
     .filter(u => u.__total > 0)
     .sort((a, b) => b.__total - a.__total);
@@ -136,76 +134,113 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   });
 
   /* -------- rows -------- */
-
   ctx.font = "16px 'Times New Roman'";
   let rowIdx = 0;
 
   sorted.forEach((u, i) => {
     const y = tableY + rowIdx * rowHeight;
 
-    ctx.fillStyle = rowIdx % 2 === 0 ? "rgba(255,255,255,0.07)" : "transparent";
+    // Zebra stripes + top 3 highlight
+    if (i === 0) ctx.fillStyle = "rgba(255,215,0,0.15)";
+    else if (i === 1) ctx.fillStyle = "rgba(192,192,192,0.15)";
+    else if (i === 2) ctx.fillStyle = "rgba(205,127,50,0.15)";
+    else ctx.fillStyle = rowIdx % 2 === 0 ? "rgba(255,255,255,0.07)" : "transparent";
+
     ctx.fillRect(tableX, y, tableWidth, rowHeight);
 
-    ctx.strokeStyle = "rgba(255,255,255,0.1)";
-    ctx.strokeRect(tableX, y, tableWidth, rowHeight);
+    // Vertical column separators
+    let sepX = tableX;
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = 1;
+    colWidths.forEach(w => {
+      sepX += w;
+      ctx.beginPath();
+      ctx.moveTo(sepX, y);
+      ctx.lineTo(sepX, y + rowHeight);
+      ctx.stroke();
+    });
 
+    // Right-align numeric columns
     let cx = tableX;
     ctx.textAlign = "center";
 
+    // Rank + optional badge
     ctx.fillStyle = "#cbd5f5";
-    ctx.fillText(`#${i + 1}`, cx + colWidths[0] / 2, y + 28);
+    const rankText = `#${i + 1}`;
+    ctx.fillText(rankText, cx + colWidths[0] / 2, y + 28);
+    if (i === 0) ctx.fillText("🏆", cx + colWidths[0] - 10, y + 28);
+    else if (i === 1) ctx.fillText("★★", cx + colWidths[0] - 10, y + 28);
+    else if (i === 2) ctx.fillText("★", cx + colWidths[0] - 10, y + 28);
     cx += colWidths[0];
 
+    // Username
     ctx.fillStyle = "#fff";
-    ctx.fillText(u.displayName, cx + colWidths[1] / 2, y + 28);
+    ctx.textAlign = "left";
+    ctx.fillText(u.displayName || "", cx + 5, y + 28);
     cx += colWidths[1];
 
+    // Counts right-aligned
+    ctx.textAlign = "right";
     ["misc", "event", "rp", "raid"].forEach((t, idx) => {
       ctx.fillStyle = typeColors[t];
-      ctx.fillText(u.counts[t] || 0, cx + colWidths[idx + 2] / 2, y + 28);
+      ctx.fillText(u.counts[t] || 0, cx + colWidths[idx + 2] - 5, y + 28);
       cx += colWidths[idx + 2];
     });
 
+    // TOTAL right-most with glow
     ctx.fillStyle = typeColors.total;
+    ctx.shadowColor = "#a2C6Ca";
+    ctx.shadowBlur = 6;
     ctx.font = "bold 16px 'Times New Roman'";
-    ctx.fillText(u.__total, cx + colWidths[6] / 2, y + 28);
+    ctx.fillText(u.__total, cx + colWidths[6] - 5, y + 28);
+    ctx.shadowBlur = 0;
     ctx.font = "16px 'Times New Roman'";
 
     rowIdx++;
   });
 
   /* -------- TOTAL row -------- */
-
   const y = tableY + rowIdx * rowHeight;
   ctx.fillStyle = "rgba(255,255,255,0.15)";
   ctx.fillRect(tableX, y, tableWidth, rowHeight);
-  ctx.strokeStyle = "#fff";
-  ctx.strokeRect(tableX, y, tableWidth, rowHeight);
 
   let cx = tableX;
   ctx.font = "bold 16px 'Times New Roman'";
   ctx.fillStyle = "#fff";
 
+  // Rank column blank
+  ctx.textAlign = "center";
   ctx.fillText("—", cx + colWidths[0] / 2, y + 28);
   cx += colWidths[0];
 
-  ctx.fillText("TOTAL", cx + colWidths[1] / 2, y + 28);
+  // TOTAL label
+  ctx.textAlign = "left";
+  ctx.fillText("TOTAL", cx + 5, y + 28);
   cx += colWidths[1];
 
+  // Counts
+  ctx.textAlign = "right";
   ["misc", "event", "rp", "raid"].forEach((t, idx) => {
     ctx.fillStyle = typeColors[t];
-    ctx.fillText(globalTotals[t], cx + colWidths[idx + 2] / 2, y + 28);
+    ctx.fillText(globalTotals[t], cx + colWidths[idx + 2] - 5, y + 28);
     cx += colWidths[idx + 2];
   });
 
+  // TOTAL
   ctx.fillStyle = typeColors.total;
-  ctx.fillText(globalTotals.total, cx + colWidths[6] / 2, y + 28);
+  ctx.shadowColor = "#a2C6Ca";
+  ctx.shadowBlur = 6;
+  ctx.fillText(globalTotals.total, cx + colWidths[6] - 5, y + 28);
+  ctx.shadowBlur = 0;
 
   /* -------------------- Footer -------------------- */
   ctx.textAlign = "center";
   ctx.fillStyle = "#888";
   ctx.font = "14px 'Times New Roman'";
   ctx.fillText("Generated by RAV Media Manager", width / 2, height - 30);
+
+  const currentDate = new Date().toLocaleDateString();
+  ctx.fillText(`Generated on ${currentDate}`, width / 2, height - 10);
 
   return canvas.toBuffer();
 }
