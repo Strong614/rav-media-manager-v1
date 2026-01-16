@@ -2,8 +2,8 @@ import { createCanvas, loadImage } from "canvas";
 import { formatRavMonth } from "../ui/formatRavMonth.js";
 
 export async function generateActivityImage(stats, monthKey) {
-  const width = 1600;
-  const height = 800;
+  const width = 2000;
+  const height = 1000;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
 
