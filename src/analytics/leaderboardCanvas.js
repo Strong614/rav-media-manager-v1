@@ -28,7 +28,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   const leftX = 50;
   const leftY = 120;
   const leftWidth = Math.floor(width * 0.48);
-  const leftHeight = 400;
+  const leftHeight = 600; // increased height
 
   const maxTotal = Math.max(...authorsOnly.map(u => u.total)) || 1;
 
@@ -37,7 +37,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   ctx.lineWidth = 1;
   ctx.font = "14px 'Times New Roman'";
   ctx.fillStyle = "#ccc";
-  const step = Math.ceil(maxTotal / 5);
+  const step = Math.ceil(maxTotal / 5) || 1;
   for (let i = 0; i <= maxTotal; i += step) {
     const y = leftY + leftHeight - (i / maxTotal) * leftHeight;
     ctx.beginPath();
@@ -60,27 +60,29 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   const internalGap = 5;
   const barWidth = (groupWidth - internalGap * 3) / 4; // 4 bars per user
 
+  // Draw bars
   authorsOnly.forEach((u, idx) => {
     const startX = leftX + idx * groupWidth + internalGap / 2;
     const yBottom = leftY + leftHeight;
+    const isMax = u.total === maxTotal;
 
-    if (u.total === maxTotal) {
-      ctx.save();
-      ctx.shadowColor = "rgba(255,255,255,0.4)";
-      ctx.shadowBlur = 15;
-    }
+    if (isMax) ctx.save(); // glow effect for max
 
     let barX = startX;
     ["misc", "event", "rp", "raid"].forEach(type => {
       const count = u.counts[type] || 0;
-      const barHeight = (count / maxTotal) * leftHeight;
+      const barHeight = Math.max((count / maxTotal) * leftHeight, 1); // min 1px
       const y = yBottom - barHeight;
       ctx.fillStyle = typeColors[type];
+      if (isMax) {
+        ctx.shadowColor = "rgba(255,255,255,0.4)";
+        ctx.shadowBlur = 15;
+      }
       ctx.fillRect(barX, y, barWidth, barHeight);
       barX += barWidth + internalGap;
     });
 
-    if (u.total === maxTotal) ctx.restore();
+    if (isMax) ctx.restore();
 
     // Total number on top
     ctx.fillStyle = "#fff";
@@ -90,7 +92,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
 
     // Name below group
     ctx.save();
-    ctx.translate(startX + (barWidth * 4 + internalGap * 3) / 2, yBottom + 40);
+    ctx.translate(startX + (barWidth * 4 + internalGap * 3) / 2, yBottom + 50); // moved down
     ctx.rotate(-Math.PI / 4);
     ctx.font = "16px 'Times New Roman'";
     ctx.fillStyle = "#ddd";
@@ -101,7 +103,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
 
   /* -------------------- KPI Legend -------------------- */
   const legendX = leftX;
-  const legendY = leftY + leftHeight + 120;
+  const legendY = leftY + leftHeight + 140; // moved down
   const kpi = [
     { label: "Misc", color: typeColors.misc },
     { label: "Event", color: typeColors.event },
@@ -125,7 +127,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   const tableY = 200;
   const tableWidth = Math.floor(width * 0.48);
   const rowHeight = 40;
-  const colRatios = [0.4, 0.125, 0.125, 0.125, 0.125, 0.12]; // removed rank column
+  const colRatios = [0.4, 0.125, 0.125, 0.125, 0.125, 0.12];
   const colWidths = colRatios.map(r => Math.floor(tableWidth * r));
   const headers = ["User", "Misc", "Event", "RP", "Raid", "Total"];
 
@@ -168,10 +170,6 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   let rowIdx = 0;
   sorted.forEach((u, i) => {
     const y = tableY + rowIdx * rowHeight;
-
-    // Row background transparent
-    ctx.fillStyle = "transparent";
-    ctx.fillRect(tableX, y, tableWidth, rowHeight);
 
     // Column separators
     let sepX = tableX;
