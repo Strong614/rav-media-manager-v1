@@ -2,8 +2,11 @@ import { createCanvas } from "canvas";
 import { formatRavMonth } from "../ui/formatRavMonth.js";
 
 export async function generateDualLeaderboardImage(leaderboard, monthKey) {
-  // Canvas size
-  const width = 2000;
+  const authorsOnly = leaderboard.filter(u => u.total > 0);
+  const numUsers = authorsOnly.length;
+
+  // Dynamic canvas width if too many users
+  const width = Math.max(2000, 400 + numUsers * 100);
   const height = 1000;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
@@ -21,13 +24,12 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   ctx.textAlign = "left";
   ctx.fillText(`RAV Leaderboard | ${formatRavMonth(monthKey)}`, 50, 60);
 
-  /* -------------------- Left Graph (Posting leaderboard + KPI) -------------------- */
-  const leftGraphX = 50;
-  const leftGraphY = 120;
-  const leftGraphWidth = Math.floor(width * 0.35);
-  const leftGraphHeight = 400;
+  /* -------------------- Left Graph (Posting leaderboard) -------------------- */
+  const leftX = 50;
+  const leftY = 120;
+  const leftWidth = Math.floor(width * 0.48);
+  const leftHeight = 400;
 
-  const authorsOnly = leaderboard.filter(u => u.total > 0);
   const maxTotal = Math.max(...authorsOnly.map(u => u.total)) || 1;
 
   // Horizontal grid lines
@@ -37,15 +39,14 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   ctx.fillStyle = "#ccc";
   const step = Math.ceil(maxTotal / 5);
   for (let i = 0; i <= maxTotal; i += step) {
-    const y = leftGraphY + leftGraphHeight - (i / maxTotal) * leftGraphHeight;
+    const y = leftY + leftHeight - (i / maxTotal) * leftHeight;
     ctx.beginPath();
-    ctx.moveTo(leftGraphX - 40, y);
-    ctx.lineTo(leftGraphX + leftGraphWidth, y);
+    ctx.moveTo(leftX - 40, y);
+    ctx.lineTo(leftX + leftWidth, y);
     ctx.stroke();
-    ctx.fillText(i, leftGraphX - 50, y + 5);
+    ctx.fillText(i, leftX - 50, y + 5);
   }
 
-  // Colors
   const typeColors = {
     misc: "#4ade80",
     event: "#60a5fa",
@@ -54,16 +55,14 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     total: "#00ffff"
   };
 
-  // Bar widths and spacing
-  const numUsers = authorsOnly.length;
-  const groupWidth = leftGraphWidth / Math.max(numUsers, 1);
+  // Calculate bar width per user group
+  const groupWidth = leftWidth / Math.max(numUsers, 1);
   const internalGap = 5;
-  const barWidth = (groupWidth - internalGap * 3) / 4; // 4 bars per user
+  const barWidth = (groupWidth - internalGap * 3) / 4; // 4 bars per group
 
-  // Draw bars per user
   authorsOnly.forEach((u, idx) => {
-    const startX = leftGraphX + idx * groupWidth + internalGap / 2;
-    const yBottom = leftGraphY + leftGraphHeight;
+    const startX = leftX + idx * groupWidth + internalGap / 2;
+    const yBottom = leftY + leftHeight;
 
     // Glow for top contributor
     if (u.total === maxTotal) {
@@ -75,7 +74,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     let barX = startX;
     ["misc", "event", "rp", "raid"].forEach(type => {
       const count = u.counts[type] || 0;
-      const barHeight = (count / maxTotal) * leftGraphHeight;
+      const barHeight = (count / maxTotal) * leftHeight;
       const y = yBottom - barHeight;
       ctx.fillStyle = typeColors[type];
       ctx.fillRect(barX, y, barWidth, barHeight);
@@ -84,11 +83,11 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
 
     if (u.total === maxTotal) ctx.restore();
 
-    // Total number on top of group
+    // Total number on top
     ctx.fillStyle = "#fff";
     ctx.font = "bold 18px 'Times New Roman'";
     ctx.textAlign = "center";
-    ctx.fillText(u.total, startX + (barWidth * 4 + internalGap * 3) / 2, yBottom - (u.total / maxTotal) * leftGraphHeight - 10);
+    ctx.fillText(u.total, startX + (barWidth * 4 + internalGap * 3) / 2, yBottom - (u.total / maxTotal) * leftHeight - 10);
 
     // Name below group
     ctx.save();
@@ -102,8 +101,8 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   });
 
   /* -------------------- KPI Legend -------------------- */
-  const legendX = leftGraphX;
-  const legendY = leftGraphY + leftGraphHeight + 120;
+  const legendX = leftX;
+  const legendY = leftY + leftHeight + 120;
   const kpi = [
     { label: "Misc", color: typeColors.misc },
     { label: "Event", color: typeColors.event },
@@ -122,12 +121,11 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     legendOffsetX += 130;
   });
 
-  /* -------------------- Table (Right Side) -------------------- */
-  const tableX = Math.floor(width * 0.45);
+  /* -------------------- Right Table -------------------- */
+  const tableX = Math.floor(width * 0.5);
   const tableY = 200;
-  const tableWidth = Math.floor(width * 0.52);
+  const tableWidth = Math.floor(width * 0.48);
   const rowHeight = 40;
-
   const colRatios = [0.12, 0.28, 0.125, 0.125, 0.125, 0.125, 0.12];
   const colWidths = colRatios.map(r => Math.floor(tableWidth * r));
   const headers = ["#", "User", "Misc", "Event", "RP", "Raid", "Total"];
@@ -140,7 +138,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   ctx.font = "bold 18px 'Times New Roman'";
   ctx.fillStyle = "#fff";
 
-  // Header
+  // Table headers
   let hx = tableX;
   headers.forEach((h, i) => {
     ctx.fillText(h, hx + colWidths[i] / 2, tableY - 10);
@@ -166,11 +164,13 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     globalTotals.total += u.__total;
   });
 
-  // Rows
+  // Table rows
   ctx.font = "16px 'Times New Roman'";
   let rowIdx = 0;
   sorted.forEach((u, i) => {
     const y = tableY + rowIdx * rowHeight;
+
+    // Row background transparent
     ctx.fillStyle = "transparent";
     ctx.fillRect(tableX, y, tableWidth, rowHeight);
 
@@ -186,7 +186,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
       ctx.stroke();
     });
 
-    // Rank + name
+    // Rank + username
     let cx = tableX;
     ctx.fillStyle = "#cbd5f5";
     ctx.textAlign = "center";
@@ -197,12 +197,14 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     ctx.fillText(u.displayName || "", cx + colWidths[1] / 2, y + 28);
     cx += colWidths[1];
 
+    // Counts centered
     ["misc", "event", "rp", "raid"].forEach((t, idx) => {
       ctx.fillStyle = typeColors[t];
       ctx.fillText(u.counts[t] || 0, cx + colWidths[idx + 2] / 2, y + 28);
       cx += colWidths[idx + 2];
     });
 
+    // Total column
     ctx.fillStyle = typeColors.total;
     ctx.fillText(u.__total, cx + colWidths[6] / 2, y + 28);
 
@@ -217,8 +219,8 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   let cx = tableX;
   ctx.font = "bold 16px 'Times New Roman'";
   ctx.fillStyle = "#fff";
-  ctx.textAlign = "center";
 
+  ctx.textAlign = "center";
   ctx.fillText("—", cx + colWidths[0] / 2, yTotal + 28);
   cx += colWidths[0];
   ctx.fillText("TOTAL", cx + colWidths[1] / 2, yTotal + 28);
