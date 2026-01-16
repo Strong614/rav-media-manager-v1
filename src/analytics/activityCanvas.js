@@ -121,6 +121,93 @@ export async function generateActivityImage(stats, monthKey) {
   ctx.font = "bold 34px 'Times New Roman'";
   ctx.fillText(total, width - 240, 155);
 
+    /* ───── Summary table (right side, structured like mockup) ───── */
+  const tableX = width - 900;
+  const tableY = 190;
+  const labelColWidth = 360;
+  const valueColWidth = 140;
+  const imageColWidth = 360;
+  const rowHeight = 90;
+
+  const rows = [
+    ...entries,
+    { label: "Total Posts", value: total, isTotal: true }
+  ];
+
+  const tableHeight = rows.length * rowHeight;
+
+  /* White background */
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(
+    tableX,
+    tableY,
+    labelColWidth + valueColWidth + imageColWidth,
+    tableHeight
+  );
+
+  ctx.strokeStyle = "#000000";
+  ctx.lineWidth = 2;
+
+  /* Vertical separators */
+  ctx.beginPath();
+  ctx.moveTo(tableX + labelColWidth, tableY);
+  ctx.lineTo(tableX + labelColWidth, tableY + tableHeight);
+  ctx.moveTo(tableX + labelColWidth + valueColWidth, tableY);
+  ctx.lineTo(tableX + labelColWidth + valueColWidth, tableY + tableHeight);
+  ctx.stroke();
+
+  /* Horizontal lines (left + middle columns only) */
+  rows.forEach((_, i) => {
+    const y = tableY + i * rowHeight;
+    ctx.beginPath();
+    ctx.moveTo(tableX, y);
+    ctx.lineTo(tableX + labelColWidth + valueColWidth, y);
+    ctx.stroke();
+  });
+
+  /* Outer border */
+  ctx.strokeRect(
+    tableX,
+    tableY,
+    labelColWidth + valueColWidth + imageColWidth,
+    tableHeight
+  );
+
+  /* Cell text */
+  rows.forEach((row, i) => {
+    const centerY = tableY + i * rowHeight + rowHeight / 2 + 10;
+
+    ctx.font = row.isTotal
+      ? "bold 34px 'Times New Roman'"
+      : "32px 'Times New Roman'";
+
+    ctx.fillStyle = row.isTotal ? "#2f5d1e" : "#000000";
+
+    /* Label */
+    ctx.textAlign = "left";
+    ctx.fillText(row.label, tableX + 30, centerY);
+
+    /* Value */
+    ctx.textAlign = "center";
+    ctx.fillText(
+      row.value,
+      tableX + labelColWidth + valueColWidth / 2,
+      centerY
+    );
+  });
+
+  /* Optional placeholder for image panel (keeps layout exact) */
+  ctx.strokeStyle = "rgba(0,0,0,0.2)";
+  ctx.setLineDash([10, 6]);
+  ctx.strokeRect(
+    tableX + labelColWidth + valueColWidth + 20,
+    tableY + 20,
+    imageColWidth - 40,
+    tableHeight - 40
+  );
+  ctx.setLineDash([]);
+
+
   /* ───── Footer ───── */
   ctx.textAlign = "center";
   ctx.fillStyle = "rgba(255,255,255,0.45)";
