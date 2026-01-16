@@ -7,21 +7,15 @@ export const ravActivityCommand = {
     .setName("rav-activity")
     .setDescription("Show RAV activity breakdown")
     .addStringOption(option =>
-      option
-        .setName("month")
-        .setDescription("Month in YYYY-MM format")
-        .setRequired(false)
+      option.setName("month")
+            .setDescription("Month in YYYY-MM format")
+            .setRequired(false)
     ),
 
   async execute(interaction) {
-    // Allowed channels
-    const ALLOWED_CHANNELS = ["1361026129300815993", "1459687645629386836"]; // replace with your channel IDs
-    if (!ALLOWED_CHANNELS.includes(interaction.channelId)) {
-      return interaction.reply({
-        content: "This command can only be used in the designated channels.",
-        ephemeral: true
-      });
-    }
+    const ALLOWED_CHANNELS = ["1361026129300815993", "1459687645629386836"];
+    if (!ALLOWED_CHANNELS.includes(interaction.channelId))
+      return interaction.reply({ content: "This command can only be used in the designated channels.", ephemeral: true });
 
     let monthKey = interaction.options.getString("month");
     if (!monthKey) {
@@ -32,18 +26,18 @@ export const ravActivityCommand = {
       monthKey = `${year}-${String(month).padStart(2, "0")}`;
     }
 
-    const stats = activityStats["all"];
+    const stats = activityStats.all;
     if (!stats) return interaction.reply("No activity data recorded yet.");
 
+    // Generate canvas from latest stats
     const buffer = await generateActivityImage(stats, monthKey);
     const attachment = new AttachmentBuilder(buffer, { name: "activity.png" });
 
     const embed = new EmbedBuilder()
-      .setTitle(`RAV Activity Overview`)
+      .setTitle("RAV Activity Overview")
       .setColor(0xA2C6CA)
       .setImage("attachment://activity.png");
 
     await interaction.reply({ embeds: [embed], files: [attachment] });
   }
 };
-

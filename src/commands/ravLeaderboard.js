@@ -7,24 +7,18 @@ export const ravLeaderboardCommand = {
     .setName("rav-leaderboard")
     .setDescription("Show posts leaderboard")
     .addStringOption(option =>
-      option
-        .setName("month")
-        .setDescription("Month in YYYY-MM format (optional)")
-        .setRequired(false)
+      option.setName("month")
+            .setDescription("Month in YYYY-MM format (optional)")
+            .setRequired(false)
     ),
 
   async execute(interaction) {
     await interaction.deferReply();
 
-    // Allowed channels
-    const ALLOWED_CHANNELS = ["1361026129300815993", "1459687645629386836"]; // replace with your channel IDs
-    if (!ALLOWED_CHANNELS.includes(interaction.channelId)) {
-      return interaction.editReply({
-        content: "This command can only be used in the designated channels."
-      });
-    }
+    const ALLOWED_CHANNELS = ["1361026129300815993", "1459687645629386836"];
+    if (!ALLOWED_CHANNELS.includes(interaction.channelId))
+      return interaction.editReply({ content: "This command can only be used in the designated channels." });
 
-    // Determine month key
     let monthKey = interaction.options.getString("month");
     if (!monthKey) {
       const now = new Date();
@@ -37,17 +31,15 @@ export const ravLeaderboardCommand = {
       monthKey = `${year}-${String(month).padStart(2, "0")}`;
     }
 
-    // Fetch leaderboard
+    // Use current in-memory stats
     const leaderboard = await getLeaderboard(monthKey, interaction.guildId);
-    if (!leaderboard.length) {
-      return interaction.editReply(`No posts found for ${monthKey}.`);
-    }
+    if (!leaderboard.length) return interaction.editReply(`No posts found for ${monthKey}.`);
 
     const buffer = await generateDualLeaderboardImage(leaderboard, monthKey);
     const attachment = new AttachmentBuilder(buffer, { name: "leaderboard.png" });
 
     const embed = new EmbedBuilder()
-      .setTitle(`Rapid Assault Vanguard Leaderboard`)
+      .setTitle("Rapid Assault Vanguard Leaderboard")
       .setColor(0xA2C6CA)
       .setImage("attachment://leaderboard.png");
 
