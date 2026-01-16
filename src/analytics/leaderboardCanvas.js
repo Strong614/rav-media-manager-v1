@@ -18,8 +18,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   ctx.fillStyle = "#a2C6Ca";
   ctx.font = "bold 44px 'Times New Roman'";
   ctx.textAlign = "left";
-  const dateRangeStr = formatRavMonth(monthKey);
-  ctx.fillText(`RAV Leaderboard | ${dateRangeStr}`, 50, 60);
+  ctx.fillText(`RAV Leaderboard | ${formatRavMonth(monthKey)}`, 50, 60);
 
   /* -------------------- Left graph -------------------- */
   const leftX = 50;
@@ -63,7 +62,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     ctx.fillRect(x, y, barWidth, barHeight);
     ctx.shadowColor = "transparent";
 
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = "#fff";
     ctx.font = "bold 18px 'Times New Roman'";
     ctx.textAlign = "center";
     ctx.fillText(u.total, x + barWidth / 2, y - 10);
@@ -85,24 +84,17 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   const tableWidth = Math.floor(width * 0.52);
   const rowHeight = 40;
 
-  // # | User | Total | Misc | Event | RP | Raid
-  const colRatios = [0.08, 0.30, 0.12, 0.125, 0.125, 0.125, 0.125];
+  // # | User | Misc | Event | RP | Raid | TOTAL
+  const colRatios = [0.08, 0.30, 0.125, 0.125, 0.125, 0.125, 0.12];
   const colWidths = colRatios.map(r => Math.floor(tableWidth * r));
+
+  const headers = ["#", "User", "Misc", "Event", "RP", "Raid", "Total"];
 
   ctx.fillStyle = "#a2C6Ca";
   ctx.font = "bold 24px 'Times New Roman'";
   ctx.textAlign = "center";
   ctx.fillText("Members participation count", tableX + tableWidth / 2, tableY - 80);
 
-  const typeColors = {
-    misc: "#4ade80",
-    event: "#60a5fa",
-    rp: "#facc15",
-    raid: "#f87171",
-    total: "#e5e7eb"
-  };
-
-  const headers = ["#", "User", "Total", "Misc", "Event", "RP", "Raid"];
   ctx.font = "bold 18px 'Times New Roman'";
   ctx.fillStyle = "#fff";
 
@@ -111,6 +103,14 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     ctx.fillText(h, hx + colWidths[i] / 2, tableY - 10);
     hx += colWidths[i];
   });
+
+  const typeColors = {
+    misc: "#4ade80",
+    event: "#60a5fa",
+    rp: "#facc15",
+    raid: "#f87171",
+    total: "#a2C6Ca"
+  };
 
   /* -------- sort + totals -------- */
 
@@ -126,14 +126,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     .filter(u => u.__total > 0)
     .sort((a, b) => b.__total - a.__total);
 
-  const globalTotals = {
-    misc: 0,
-    event: 0,
-    rp: 0,
-    raid: 0,
-    total: 0
-  };
-
+  const globalTotals = { misc: 0, event: 0, rp: 0, raid: 0, total: 0 };
   sorted.forEach(u => {
     globalTotals.misc += u.counts.misc || 0;
     globalTotals.event += u.counts.event || 0;
@@ -154,16 +147,6 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     ctx.fillRect(tableX, y, tableWidth, rowHeight);
 
     ctx.strokeStyle = "rgba(255,255,255,0.1)";
-    ctx.lineWidth = 1;
-
-    let x = tableX;
-    colWidths.forEach(w => {
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x, y + rowHeight);
-      ctx.stroke();
-      x += w;
-    });
     ctx.strokeRect(tableX, y, tableWidth, rowHeight);
 
     let cx = tableX;
@@ -177,60 +160,46 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     ctx.fillText(u.displayName, cx + colWidths[1] / 2, y + 28);
     cx += colWidths[1];
 
-    ctx.fillStyle = typeColors.total;
-    ctx.font = "bold 16px 'Times New Roman'";
-    ctx.fillText(u.__total, cx + colWidths[2] / 2, y + 28);
-    ctx.font = "16px 'Times New Roman'";
-    cx += colWidths[2];
-
     ["misc", "event", "rp", "raid"].forEach((t, idx) => {
       ctx.fillStyle = typeColors[t];
-      ctx.fillText(
-        u.counts[t] || 0,
-        cx + colWidths[idx + 3] / 2,
-        y + 28
-      );
-      cx += colWidths[idx + 3];
+      ctx.fillText(u.counts[t] || 0, cx + colWidths[idx + 2] / 2, y + 28);
+      cx += colWidths[idx + 2];
     });
+
+    ctx.fillStyle = typeColors.total;
+    ctx.font = "bold 16px 'Times New Roman'";
+    ctx.fillText(u.__total, cx + colWidths[6] / 2, y + 28);
+    ctx.font = "16px 'Times New Roman'";
 
     rowIdx++;
   });
 
-  /* -------- TOTAL ROW -------- */
+  /* -------- TOTAL row -------- */
 
   const y = tableY + rowIdx * rowHeight;
-
   ctx.fillStyle = "rgba(255,255,255,0.15)";
   ctx.fillRect(tableX, y, tableWidth, rowHeight);
-
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#fff";
   ctx.strokeRect(tableX, y, tableWidth, rowHeight);
 
   let cx = tableX;
-  ctx.textAlign = "center";
   ctx.font = "bold 16px 'Times New Roman'";
-
   ctx.fillStyle = "#fff";
+
   ctx.fillText("—", cx + colWidths[0] / 2, y + 28);
   cx += colWidths[0];
 
   ctx.fillText("TOTAL", cx + colWidths[1] / 2, y + 28);
   cx += colWidths[1];
 
-  ctx.fillStyle = typeColors.total;
-  ctx.fillText(globalTotals.total, cx + colWidths[2] / 2, y + 28);
-  cx += colWidths[2];
-
   ["misc", "event", "rp", "raid"].forEach((t, idx) => {
     ctx.fillStyle = typeColors[t];
-    ctx.fillText(
-      globalTotals[t],
-      cx + colWidths[idx + 3] / 2,
-      y + 28
-    );
-    cx += colWidths[idx + 3];
+    ctx.fillText(globalTotals[t], cx + colWidths[idx + 2] / 2, y + 28);
+    cx += colWidths[idx + 2];
   });
+
+  ctx.fillStyle = typeColors.total;
+  ctx.fillText(globalTotals.total, cx + colWidths[6] / 2, y + 28);
 
   /* -------------------- Footer -------------------- */
   ctx.textAlign = "center";
