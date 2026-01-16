@@ -1,7 +1,7 @@
 import { createCanvas } from "canvas";
 import { formatRavMonth } from "../ui/formatRavMonth.js";
 
-export async function generateDualLeaderboardImage(leaderboard, monthKey) {
+export async function generatePoliceHUDLeaderboard(leaderboard, monthKey) {
   /* -------------------- Table Prep -------------------- */
   const filteredTable = leaderboard.filter(u =>
     ["misc", "rp", "raid", "event"].some(type => {
@@ -10,11 +10,11 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     })
   );
 
-  // Sort ascending by total activity
+  // Sort descending by total activity
   const sortedTable = filteredTable.sort((a, b) => {
     const totalA = (a.counts.misc || 0) + (a.counts.event || 0) + (a.counts.rp || 0) + (a.counts.raid || 0);
     const totalB = (b.counts.misc || 0) + (b.counts.event || 0) + (b.counts.rp || 0) + (b.counts.raid || 0);
-    return totalA - totalB;
+    return totalB - totalA; // descending
   });
 
   const rowHeight = 45;
@@ -29,24 +29,35 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
 
   /* -------------------- Background -------------------- */
   const bg = ctx.createLinearGradient(0, 0, 0, height);
-  bg.addColorStop(0, "#020402");
-  bg.addColorStop(1, "#000701");
+  bg.addColorStop(0, "#010303");
+  bg.addColorStop(1, "#00080a");
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
 
   // Tactical grid overlay
-  ctx.strokeStyle = "rgba(0,255,0,0.05)";
+  ctx.strokeStyle = "rgba(0,200,255,0.05)";
   ctx.lineWidth = 1;
-  for (let x = 0; x < width; x += 60) {
+  for (let x = 0; x < width; x += 50) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, height);
     ctx.stroke();
   }
-  for (let y = 0; y < height; y += 60) {
+  for (let y = 0; y < height; y += 50) {
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+
+  // Radar-style circular overlay
+  ctx.strokeStyle = "rgba(0,200,255,0.08)";
+  ctx.lineWidth = 2;
+  const radarCenterX = 350;
+  const radarCenterY = 400;
+  for (let r = 50; r <= 350; r += 50) {
+    ctx.beginPath();
+    ctx.arc(radarCenterX, radarCenterY, r, 0, Math.PI * 2);
     ctx.stroke();
   }
 
@@ -54,13 +65,13 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   const dateRangeStr = formatRavMonth(monthKey);
   ctx.font = "bold 50px 'Courier New'";
   ctx.textAlign = "left";
-  ctx.fillStyle = "#00ff44";
-  ctx.shadowColor = "#00ff44";
+  ctx.fillStyle = "#00d4ff";
+  ctx.shadowColor = "#00d4ff";
   ctx.shadowBlur = 20;
   ctx.fillText(`RAV Leaderboard | ${dateRangeStr}`, 60, 80);
   ctx.shadowBlur = 0;
 
-  /* -------------------- Left Bar Chart (Holographic) -------------------- */
+  /* -------------------- Left Bar Chart -------------------- */
   const leftX = 60;
   const leftY = 150;
   const leftWidth = 600;
@@ -69,11 +80,11 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   const authorsOnly = leaderboard.filter(u => u.total > 0);
   const maxTotal = Math.max(...authorsOnly.map(u => u.total)) || 1;
 
-  // Y-axis grid lines
-  ctx.strokeStyle = "rgba(0,255,0,0.2)";
+  // Y-axis lines
+  ctx.strokeStyle = "rgba(0,200,255,0.2)";
   ctx.lineWidth = 2;
   ctx.font = "16px 'Courier New'";
-  ctx.fillStyle = "#00ff44";
+  ctx.fillStyle = "#00d4ff";
   for (let i = 0; i <= maxTotal; i += Math.ceil(maxTotal / 5)) {
     const y = leftY + leftHeight - (i / maxTotal) * leftHeight;
     ctx.beginPath();
@@ -90,18 +101,16 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     const x = leftX + idx * (barWidth + gap);
     const y = leftY + leftHeight - barHeight;
 
-    // Neon green gradient bar
     const gradient = ctx.createLinearGradient(x, y, x, y + barHeight);
-    gradient.addColorStop(0, "#00ff44");
-    gradient.addColorStop(1, "#007700");
+    gradient.addColorStop(0, "#00d4ff");
+    gradient.addColorStop(1, "#006080");
     ctx.fillStyle = gradient;
-    ctx.shadowColor = "#00ff44";
+    ctx.shadowColor = "#00d4ff";
     ctx.shadowBlur = 15;
     ctx.fillRect(x, y, barWidth, barHeight);
     ctx.shadowBlur = 0;
 
-    // Bar value
-    ctx.fillStyle = "#00ff44";
+    ctx.fillStyle = "#00d4ff";
     ctx.font = "bold 18px 'Courier New'";
     ctx.textAlign = "center";
     ctx.fillText(u.total, x + barWidth / 2, y - 10);
@@ -121,9 +130,8 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   const colWidths = [280, 120, 120, 120, 120];
   const tableWidth = colWidths.reduce((a, b) => a + b, 0);
 
-  // Holographic panel
-  ctx.fillStyle = "rgba(0,255,0,0.06)";
-  ctx.strokeStyle = "rgba(0,255,0,0.3)";
+  ctx.fillStyle = "rgba(0,200,255,0.06)";
+  ctx.strokeStyle = "rgba(0,200,255,0.3)";
   ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.roundRect(rightX - 40, rightY - 120, tableWidth + 80, tableRows * rowHeight + 220, 20);
@@ -132,43 +140,40 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
 
   // Table title
   ctx.font = "bold 36px 'Courier New'";
-  ctx.fillStyle = "#00ff44";
-  ctx.shadowColor = "#00ff44";
+  ctx.fillStyle = "#00d4ff";
+  ctx.shadowColor = "#00d4ff";
   ctx.shadowBlur = 12;
   ctx.textAlign = "center";
   ctx.fillText("Participation Breakdown", rightX + tableWidth / 2, rightY - 50);
   ctx.shadowBlur = 0;
 
-  // Table headers
+  // Headers
   const typeColors = {
-    misc: "#00ff44",
-    event: "#00ff88",
-    rp: "#00cc44",
-    raid: "#00aa33"
+    misc: "#00ff99",
+    event: "#00ffff",
+    rp: "#00ccaa",
+    raid: "#009977"
   };
   ctx.font = "bold 20px 'Courier New'";
-  ctx.fillStyle = "#00ff44";
+  ctx.fillStyle = "#00d4ff";
   let xOffset = rightX;
   ["User", "Misc", "Event", "RP", "Raid"].forEach((header, idx) => {
     ctx.fillText(header, xOffset + colWidths[idx] / 2, rightY - 10);
     xOffset += colWidths[idx];
   });
 
-  // Render sorted table rows
+  // Render table rows descending
   ctx.font = "18px 'Courier New'";
   sortedTable.forEach((u, index) => {
     const y = rightY + index * rowHeight;
 
-    // Alternate row holographic shading
-    ctx.fillStyle = index % 2 === 0 ? "rgba(0,255,0,0.05)" : "transparent";
+    ctx.fillStyle = index % 2 === 0 ? "rgba(0,200,255,0.05)" : "transparent";
     ctx.fillRect(rightX - 20, y, tableWidth + 40, rowHeight);
 
-    // User name
-    ctx.fillStyle = "#00ff44";
+    ctx.fillStyle = "#00d4ff";
     ctx.textAlign = "center";
     ctx.fillText(u.displayName, rightX + colWidths[0] / 2, y + 28);
 
-    // Counts
     let cx = rightX + colWidths[0];
     ["misc", "event", "rp", "raid"].forEach((type, i) => {
       const count = u.counts[type] || 0;
@@ -183,7 +188,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
 
   /* -------------------- Footer -------------------- */
   ctx.textAlign = "center";
-  ctx.fillStyle = "#007700";
+  ctx.fillStyle = "#006080";
   ctx.font = "16px 'Courier New'";
   ctx.fillText("Generated by RAV Media Manager", width / 2, height - 30);
 
