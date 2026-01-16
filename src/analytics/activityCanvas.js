@@ -31,10 +31,10 @@ export async function generateActivityImage(stats, monthKey) {
 
   /* ───── Prepare entries & sort descending ───── */
   const entries = [
-    { label: "Misc", value: stats.misc, colors: ["#34d399", "#166534"] },
-    { label: "Events", value: stats.event, colors: ["#3b82f6", "#1e40af"] },
-    { label: "Roleplays", value: stats.roleplay, colors: ["#eab308", "#854d0e"] },
-    { label: "Raids", value: stats.raid, colors: ["#ef4444", "#7f1d1d"] }
+    { label: "Misc", value: stats.misc },
+    { label: "Events", value: stats.event },
+    { label: "Roleplays", value: stats.roleplay },
+    { label: "Raids", value: stats.raid }
   ];
 
   entries.sort((a, b) => b.value - a.value);
@@ -47,9 +47,12 @@ export async function generateActivityImage(stats, monthKey) {
   ctx.font = "14px 'Times New Roman'";
   ctx.fillStyle = "#bbb";
 
+  const baseY = 620;           // ⬇ diagram moved down
+  const chartHeight = 360;
+
   const step = Math.ceil(max / 5) || 1;
   for (let i = 0; i <= max; i += step) {
-    const y = 500 - (i / max) * 300;
+    const y = baseY - (i / max) * chartHeight;
     ctx.beginPath();
     ctx.moveTo(80, y);
     ctx.lineTo(width - 60, y);
@@ -61,17 +64,17 @@ export async function generateActivityImage(stats, monthKey) {
   const barWidth = 120;
   const gap = 80;
   const startX = 120;
-  const baseY = 500;
   const maxValue = Math.max(...entries.map(e => e.value));
 
   entries.forEach((e, i) => {
-    const barHeight = (e.value / max) * 300;
+    const barHeight = (e.value / max) * chartHeight;
     const x = startX + i * (barWidth + gap);
     const y = baseY - barHeight;
 
+    /* Cyan / blue gradient */
     const gradient = ctx.createLinearGradient(x, y, x, baseY);
-    gradient.addColorStop(0, e.colors[0]);
-    gradient.addColorStop(1, e.colors[1]);
+    gradient.addColorStop(0, "#67e8f9");
+    gradient.addColorStop(1, "#0891b2");
     ctx.fillStyle = gradient;
 
     /* Highlight highest bar */
@@ -97,7 +100,7 @@ export async function generateActivityImage(stats, monthKey) {
 
     /* Category label */
     ctx.save();
-    ctx.translate(x + barWidth / 2, baseY + 48);
+    ctx.translate(x + barWidth / 2, baseY + 52);
     ctx.rotate(-Math.PI / 6);
     ctx.font = "16px 'Times New Roman'";
     ctx.fillStyle = "rgba(221,221,221,0.85)";
