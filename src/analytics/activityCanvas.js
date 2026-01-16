@@ -6,7 +6,6 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-
 export async function generateActivityImage(stats, monthKey) {
   const width = 2000;
   const height = 1000;
@@ -48,7 +47,7 @@ export async function generateActivityImage(stats, monthKey) {
   ];
 
   entries.sort((a, b) => b.value - a.value);
-  const total = entries.reduce((a, b) => a + b.value, 0);
+  const total = entries.reduce((sum, e) => sum + e.value, 0);
 
   /* ───── Grid lines (chart only) ───── */
   const max = Math.max(...entries.map(e => e.value), 1);
@@ -131,19 +130,25 @@ export async function generateActivityImage(stats, monthKey) {
   ctx.font = "bold 34px 'Times New Roman'";
   ctx.fillText(total, chartAreaWidth + tableAreaWidth / 2, 155);
 
-    /* ───── Load logo ───── */
-  const logo = await loadImage(
-  path.join(__dirname, "../assets/rav_logo.png")
-);
+  /* ───── Load logo ───── */
+  const logo = await loadImage(path.join(__dirname, "../assets/rav_logo.png"));
 
-  /* ───── Table (transparent, aligned) ───── */
+  // Draw a **single logo** in the summary card, top-right corner
+  const logoMaxWidth = 100;
+  const logoMaxHeight = 100;
+  const scale = Math.min(logoMaxWidth / logo.width, logoMaxHeight / logo.height);
+  const drawW = logo.width * scale;
+  const drawH = logo.height * scale;
+  const logoX = chartAreaWidth + tableAreaWidth - 80 - drawW;
+  const logoY = 95 + (70 - drawH) / 2; // vertically center in summary card
+  ctx.drawImage(logo, logoX, logoY, drawW, drawH);
+
+  /* ───── Table (labels & values only) ───── */
   const tableX = chartAreaWidth + 40;
   const tableY = 190;
   const rowHeight = 80;
-
-  const labelColWidth = Math.floor(tableAreaWidth * 0.45);
-  const valueColWidth = Math.floor(tableAreaWidth * 0.2);
-  const imageColWidth = Math.floor(tableAreaWidth * 0.35);
+  const labelColWidth = Math.floor(tableAreaWidth * 0.65);
+  const valueColWidth = Math.floor(tableAreaWidth * 0.35);
 
   const rows = [...entries, { label: "Total Posts", value: total, isTotal: true }];
   const tableHeight = rows.length * rowHeight;
@@ -151,13 +156,13 @@ export async function generateActivityImage(stats, monthKey) {
   ctx.strokeStyle = "rgba(255,255,255,0.25)";
   ctx.lineWidth = 1.5;
 
+  // Vertical lines
   ctx.beginPath();
   ctx.moveTo(tableX + labelColWidth, tableY);
   ctx.lineTo(tableX + labelColWidth, tableY + tableHeight);
-  ctx.moveTo(tableX + labelColWidth + valueColWidth, tableY);
-  ctx.lineTo(tableX + labelColWidth + valueColWidth, tableY + tableHeight);
   ctx.stroke();
 
+  // Horizontal lines
   rows.forEach((_, i) => {
     const y = tableY + i * rowHeight;
     ctx.beginPath();
@@ -166,57 +171,20 @@ export async function generateActivityImage(stats, monthKey) {
     ctx.stroke();
   });
 
-  ctx.strokeRect(
-    tableX,
-    tableY,
-    labelColWidth + valueColWidth + imageColWidth,
-    tableHeight
-  );
+  ctx.strokeRect(tableX, tableY, labelColWidth + valueColWidth, tableHeight);
 
-rows.forEach((row, i) => {
-  const centerY = tableY + i * rowHeight + rowHeight / 2;
+  // Fill table text
+  rows.forEach((row, i) => {
+    const centerY = tableY + i * rowHeight + rowHeight / 2;
+    ctx.font = row.isTotal ? "bold 34px 'Times New Roman'" : "32px 'Times New Roman'";
+    ctx.fillStyle = row.isTotal ? "#22d3ee" : "#ffffff";
 
-  ctx.font = row.isTotal
-    ? "bold 34px 'Times New Roman'"
-    : "32px 'Times New Roman'";
-  ctx.fillStyle = row.isTotal ? "#22d3ee" : "#ffffff";
+    ctx.textAlign = "left";
+    ctx.fillText(row.label, tableX + 30, centerY + 10);
 
-  /* Label */
-  ctx.textAlign = "left";
-  ctx.fillText(row.label, tableX + 30, centerY + 10);
-
-  /* Value */
-  ctx.textAlign = "center";
-  ctx.fillText(
-    row.value,
-    tableX + labelColWidth + valueColWidth / 2,
-    centerY + 10
-  );
-
-  /* Logo column */
-  if (!row.isTotal) {
-    const maxSize = rowHeight - 20;
-    const scale = Math.min(
-      maxSize / logo.width,
-      maxSize / logo.height
-    );
-
-    const drawW = logo.width * scale;
-    const drawH = logo.height * scale;
-
-    const logoX =
-      tableX +
-      labelColWidth +
-      valueColWidth +
-      imageColWidth / 2 -
-      drawW / 2;
-
-    const logoY = centerY - drawH / 2;
-
-    ctx.drawImage(logo, logoX, logoY, drawW, drawH);
-  }
-});
-
+    ctx.textAlign = "center";
+    ctx.fillText(row.value, tableX + labelColWidth + valueColWidth / 2, centerY + 10);
+  });
 
   /* ───── Footer ───── */
   ctx.textAlign = "center";
