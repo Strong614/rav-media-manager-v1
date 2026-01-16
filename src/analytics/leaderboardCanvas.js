@@ -5,7 +5,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   const authorsOnly = leaderboard.filter(u => u.total > 0);
   const numUsers = authorsOnly.length;
 
-  // Dynamic canvas width if too many users
+  // Dynamic canvas width
   const width = Math.max(2000, 400 + numUsers * 80);
   const height = 1000;
   const canvas = createCanvas(width, height);
@@ -28,9 +28,8 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   const leftX = 50;
   const leftY = 120;
   const leftWidth = Math.floor(width * 0.48);
-  const leftHeight = 600; // taller graph
+  const leftHeight = 600;
 
-  // Find max total for scaling
   const maxTotal = Math.max(...authorsOnly.map(u => u.total)) || 1;
 
   // Horizontal grid lines
@@ -51,9 +50,8 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   const barColor = "#00ffff"; // total posts color
   const groupWidth = leftWidth / Math.max(numUsers, 1);
   const internalGap = 5;
-  const barWidth = Math.min(groupWidth - internalGap * 2, 40);
+  const barWidth = Math.min(groupWidth - internalGap * 2, 40); // narrower bars
 
-  // Draw a single total bar per user
   authorsOnly.forEach((u, idx) => {
     const startX = leftX + idx * groupWidth + internalGap;
     const yBottom = leftY + leftHeight;
@@ -89,7 +87,15 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     ctx.restore();
   });
 
-  /* -------------------- Right Table (UNCHANGED) -------------------- */
+  /* -------------------- Right Table -------------------- */
+  const typeColors = {
+    misc: "#4ade80",
+    event: "#60a5fa",
+    rp: "#facc15",
+    raid: "#f87171",
+    total: "#00ffff"
+  };
+
   const tableX = Math.floor(width * 0.5);
   const tableY = 200;
   const tableWidth = Math.floor(width * 0.48);
