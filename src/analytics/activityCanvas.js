@@ -1,5 +1,11 @@
 import { createCanvas, loadImage } from "canvas";
 import { formatRavMonth } from "../ui/formatRavMonth.js";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 
 export async function generateActivityImage(stats, monthKey) {
   const width = 2000;
@@ -126,7 +132,10 @@ export async function generateActivityImage(stats, monthKey) {
   ctx.fillText(total, chartAreaWidth + tableAreaWidth / 2, 155);
 
     /* ───── Load logo ───── */
-  const logo = await loadImage("./assets/rav_logo.png"); // adjust path if needed
+  const logo = await loadImage(
+  path.join(__dirname, "../../assets/rav_logo.png")
+);
+
 
 
   /* ───── Table (transparent, aligned) ───── */
