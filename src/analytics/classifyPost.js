@@ -12,7 +12,8 @@ export function classifyPost(postData) {
     "Stopping PBR",
     "Stopping JB",
     "Securing VIP",
-    "Training"
+    "Training",
+    "Patrolling"
   ];
   if (miscTypes.includes(postData.activityType)) return "misc";
 
