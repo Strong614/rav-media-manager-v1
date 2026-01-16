@@ -20,7 +20,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   ctx.textAlign = "left";
   ctx.fillText(`RAV Leaderboard | ${formatRavMonth(monthKey)}`, 50, 60);
 
-  /* -------------------- Left graph -------------------- */
+  /* -------------------- Left graph (posting leaderboard + KPI) -------------------- */
   const leftX = 50;
   const leftY = 120;
   const leftWidth = Math.floor(width * 0.35);
@@ -29,11 +29,11 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   const authorsOnly = leaderboard.filter(u => u.total > 0);
   const maxTotal = Math.max(...authorsOnly.map(u => u.total)) || 1;
 
+  // Draw horizontal grid lines
   ctx.strokeStyle = "#444";
   ctx.lineWidth = 1;
   ctx.font = "14px 'Times New Roman'";
   ctx.fillStyle = "#ccc";
-
   const step = Math.ceil(maxTotal / 5);
   for (let i = 0; i <= maxTotal; i += step) {
     const y = leftY + leftHeight - (i / maxTotal) * leftHeight;
@@ -47,26 +47,46 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   const barWidth = Math.min(50, leftWidth / (authorsOnly.length * 1.6));
   const gap = barWidth * 0.6;
 
+  const typeColors = {
+    misc: "#4ade80",
+    event: "#60a5fa",
+    rp: "#facc15",
+    raid: "#f87171",
+    total: "#00ffff"
+  };
+
+  // Draw bars with stacked segments inside
   authorsOnly.forEach((u, idx) => {
-    const barHeight = (u.total / maxTotal) * leftHeight;
     const x = leftX + idx * (barWidth + gap);
-    const y = leftY + leftHeight - barHeight;
+    let yBottom = leftY + leftHeight;
 
-    const gradient = ctx.createLinearGradient(x, y, x, y + barHeight);
-    gradient.addColorStop(0, "#00ffff");
-    gradient.addColorStop(1, "#0066ff");
-    ctx.fillStyle = gradient;
-    ctx.shadowColor = "rgba(0,0,0,0.4)";
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetY = 4;
-    ctx.fillRect(x, y, barWidth, barHeight);
-    ctx.shadowColor = "transparent";
+    // Glow for top contributor
+    if (u.total === maxTotal) {
+      ctx.save();
+      ctx.shadowColor = "rgba(255,255,255,0.4)";
+      ctx.shadowBlur = 20;
+    }
 
+    // Draw stacked segments inside total bar
+    ["misc", "event", "rp", "raid"].forEach(type => {
+      const count = u.counts[type] || 0;
+      const barHeight = (count / maxTotal) * leftHeight;
+      const y = yBottom - barHeight;
+
+      ctx.fillStyle = typeColors[type];
+      ctx.fillRect(x, y, barWidth, barHeight);
+      yBottom -= barHeight;
+    });
+
+    if (u.total === maxTotal) ctx.restore();
+
+    // Total number on top of bar
     ctx.fillStyle = "#fff";
     ctx.font = "bold 18px 'Times New Roman'";
     ctx.textAlign = "center";
-    ctx.fillText(u.total, x + barWidth / 2, y - 10);
+    ctx.fillText(u.total, x + barWidth / 2, leftY + leftHeight - (u.total / maxTotal) * leftHeight - 10);
 
+    // Name below bar
     ctx.save();
     ctx.translate(x + barWidth / 2, leftY + leftHeight + 40);
     ctx.rotate(-Math.PI / 4);
@@ -77,7 +97,34 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     ctx.restore();
   });
 
-  /* -------------------- Table -------------------- */
+  /* -------------------- KPI Legend below graph -------------------- */
+  const legendX = leftX;
+  const legendY = leftY + leftHeight + 120;
+  const kpi = [
+    { label: "Misc", color: typeColors.misc },
+    { label: "Event", color: typeColors.event },
+    { label: "RP", color: typeColors.rp },
+    { label: "Raid", color: typeColors.raid },
+    { label: "Total Posts", color: typeColors.total }
+  ];
+
+  ctx.font = "16px 'Times New Roman'";
+  ctx.textAlign = "left";
+
+  let legendOffsetX = 0;
+  kpi.forEach(item => {
+    // Draw color box
+    ctx.fillStyle = item.color;
+    ctx.fillRect(legendX + legendOffsetX, legendY, 20, 20);
+
+    // Draw label
+    ctx.fillStyle = "#fff";
+    ctx.fillText(item.label, legendX + legendOffsetX + 25, legendY + 16);
+
+    legendOffsetX += 130;
+  });
+
+  /* -------------------- Table (right side) -------------------- */
   const tableX = Math.floor(width * 0.45);
   const tableY = 200;
   const tableWidth = Math.floor(width * 0.52);
@@ -102,14 +149,6 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     hx += colWidths[i];
   });
 
-  const typeColors = {
-    misc: "#4ade80",
-    event: "#60a5fa",
-    rp: "#facc15",
-    raid: "#f87171",
-    total: "#a2C6Ca"
-  };
-
   /* -------- sort + totals -------- */
   const sorted = leaderboard
     .map(u => ({
@@ -133,18 +172,17 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     globalTotals.total += u.__total;
   });
 
-  /* -------- rows -------- */
+  /* -------- Table rows -------- */
   ctx.font = "16px 'Times New Roman'";
   let rowIdx = 0;
 
   sorted.forEach((u, i) => {
     const y = tableY + rowIdx * rowHeight;
 
-    // Fully transparent row
     ctx.fillStyle = "transparent";
     ctx.fillRect(tableX, y, tableWidth, rowHeight);
 
-    // Vertical column separators
+    // Column separators
     let sepX = tableX;
     ctx.strokeStyle = "rgba(255,255,255,0.18)";
     ctx.lineWidth = 1;
@@ -156,7 +194,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
       ctx.stroke();
     });
 
-    // Rank + badge
+    // Rank + badges
     let cx = tableX;
     ctx.textAlign = "center";
     ctx.fillStyle = "#cbd5f5";
@@ -180,7 +218,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
       cx += colWidths[idx + 2];
     });
 
-    // TOTAL column (no glow)
+    // TOTAL column
     ctx.fillStyle = typeColors.total;
     ctx.fillText(u.__total, cx + colWidths[6] - 5, y + 28);
 
@@ -219,7 +257,6 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   ctx.fillStyle = "#888";
   ctx.font = "14px 'Times New Roman'";
   ctx.fillText("Generated by RAV Media Manager", width / 2, height - 30);
-
   const currentDate = new Date().toLocaleDateString();
   ctx.fillText(`Generated on ${currentDate}`, width / 2, height - 10);
 
