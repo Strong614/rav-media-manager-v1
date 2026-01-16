@@ -133,10 +133,8 @@ export async function generateActivityImage(stats, monthKey) {
 
     /* ───── Load logo ───── */
   const logo = await loadImage(
-  path.join(__dirname, "../../assets/rav_logo.png")
+  path.join(__dirname, "../assets/rav_logo.png")
 );
-
-
 
   /* ───── Table (transparent, aligned) ───── */
   const tableX = chartAreaWidth + 40;
