@@ -140,12 +140,8 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   sorted.forEach((u, i) => {
     const y = tableY + rowIdx * rowHeight;
 
-    // Zebra stripes + top 3 highlight
-    if (i === 0) ctx.fillStyle = "rgba(255,215,0,0.15)";
-    else if (i === 1) ctx.fillStyle = "rgba(192,192,192,0.15)";
-    else if (i === 2) ctx.fillStyle = "rgba(205,127,50,0.15)";
-    else ctx.fillStyle = rowIdx % 2 === 0 ? "rgba(255,255,255,0.07)" : "transparent";
-
+    // Fully transparent row
+    ctx.fillStyle = "transparent";
     ctx.fillRect(tableX, y, tableWidth, rowHeight);
 
     // Vertical column separators
@@ -160,15 +156,12 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
       ctx.stroke();
     });
 
-    // Right-align numeric columns
+    // Rank + badge
     let cx = tableX;
     ctx.textAlign = "center";
-
-    // Rank + optional badge
     ctx.fillStyle = "#cbd5f5";
-    const rankText = `#${i + 1}`;
-    ctx.fillText(rankText, cx + colWidths[0] / 2, y + 28);
-    if (i === 0) ctx.fillText("🏆", cx + colWidths[0] - 10, y + 28);
+    ctx.fillText(`#${i + 1}`, cx + colWidths[0] / 2, y + 28);
+    if (i === 0) ctx.fillText("★★★", cx + colWidths[0] - 10, y + 28);
     else if (i === 1) ctx.fillText("★★", cx + colWidths[0] - 10, y + 28);
     else if (i === 2) ctx.fillText("★", cx + colWidths[0] - 10, y + 28);
     cx += colWidths[0];
@@ -187,14 +180,9 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
       cx += colWidths[idx + 2];
     });
 
-    // TOTAL right-most with glow
+    // TOTAL column (no glow)
     ctx.fillStyle = typeColors.total;
-    ctx.shadowColor = "#a2C6Ca";
-    ctx.shadowBlur = 6;
-    ctx.font = "bold 16px 'Times New Roman'";
     ctx.fillText(u.__total, cx + colWidths[6] - 5, y + 28);
-    ctx.shadowBlur = 0;
-    ctx.font = "16px 'Times New Roman'";
 
     rowIdx++;
   });
@@ -208,17 +196,14 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   ctx.font = "bold 16px 'Times New Roman'";
   ctx.fillStyle = "#fff";
 
-  // Rank column blank
   ctx.textAlign = "center";
   ctx.fillText("—", cx + colWidths[0] / 2, y + 28);
   cx += colWidths[0];
 
-  // TOTAL label
   ctx.textAlign = "left";
   ctx.fillText("TOTAL", cx + 5, y + 28);
   cx += colWidths[1];
 
-  // Counts
   ctx.textAlign = "right";
   ["misc", "event", "rp", "raid"].forEach((t, idx) => {
     ctx.fillStyle = typeColors[t];
@@ -226,12 +211,8 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     cx += colWidths[idx + 2];
   });
 
-  // TOTAL
   ctx.fillStyle = typeColors.total;
-  ctx.shadowColor = "#a2C6Ca";
-  ctx.shadowBlur = 6;
   ctx.fillText(globalTotals.total, cx + colWidths[6] - 5, y + 28);
-  ctx.shadowBlur = 0;
 
   /* -------------------- Footer -------------------- */
   ctx.textAlign = "center";
