@@ -1,4 +1,4 @@
-import { createCanvas, loadImage } from "canvas";
+import { createCanvas } from "canvas";
 import { formatRavMonth } from "../ui/formatRavMonth.js";
 
 export async function generateDualLeaderboardImage(leaderboard, monthKey) {
@@ -24,7 +24,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   /* -------------------- Left graph: Posts per author -------------------- */
   const leftX = 50;
   const leftY = 120;
-  const leftWidth = 600;
+  const leftWidth = Math.floor(width * 0.35);
   const leftHeight = 400;
 
   const authorsOnly = leaderboard.filter(u => u.total > 0);
@@ -34,7 +34,9 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
   ctx.lineWidth = 1;
   ctx.font = "14px 'Times New Roman'";
   ctx.fillStyle = "#ccc";
-  for (let i = 0; i <= maxTotal; i += Math.ceil(maxTotal / 5)) {
+
+  const step = Math.ceil(maxTotal / 5);
+  for (let i = 0; i <= maxTotal; i += step) {
     const y = leftY + leftHeight - (i / maxTotal) * leftHeight;
     ctx.beginPath();
     ctx.moveTo(leftX - 30, y);
@@ -43,8 +45,8 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     ctx.fillText(i, leftX - 40, y + 5);
   }
 
-  const barWidth = 50;
-  const gap = 30;
+  const barWidth = Math.min(50, leftWidth / (authorsOnly.length * 1.6));
+  const gap = barWidth * 0.6;
 
   authorsOnly.forEach((u, idx) => {
     const barHeight = (u.total / maxTotal) * leftHeight;
@@ -76,17 +78,24 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
     ctx.restore();
   });
 
-  /* -------------------- Right table -------------------- */
-  const rightX = 800;
-  const rightY = 200;
+  /* -------------------- Right table (responsive + sorted) -------------------- */
+
+  const tableX = Math.floor(width * 0.45);
+  const tableY = 200;
+  const tableWidth = Math.floor(width * 0.5);
   const rowHeight = 40;
-  const colWidths = [250, 100, 100, 100, 100];
-  const tableWidth = colWidths.reduce((a, b) => a + b, 0);
+
+  const colRatios = [0.4, 0.15, 0.15, 0.15, 0.15];
+  const colWidths = colRatios.map(r => Math.floor(tableWidth * r));
 
   ctx.fillStyle = "#a2C6Ca";
   ctx.font = "bold 24px 'Times New Roman'";
   ctx.textAlign = "center";
-  ctx.fillText("Members participation count", rightX + tableWidth / 2, rightY - 80);
+  ctx.fillText(
+    "Members participation count",
+    tableX + tableWidth / 2,
+    tableY - 80
+  );
 
   const typeColors = {
     misc: "#4ade80",
@@ -97,58 +106,77 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
 
   ctx.font = "bold 18px 'Times New Roman'";
   ctx.fillStyle = "#fff";
-  ctx.textAlign = "center";
 
   const headers = ["User", "Misc", "Event", "RP", "Raid"];
-  let xOffset = rightX;
-  headers.forEach((header, idx) => {
-    ctx.fillText(header, xOffset + colWidths[idx] / 2, rightY - 10);
-    xOffset += colWidths[idx];
+  let headerX = tableX;
+  headers.forEach((header, i) => {
+    ctx.fillText(header, headerX + colWidths[i] / 2, tableY - 10);
+    headerX += colWidths[i];
+  });
+
+  /* ---- sort by total descending (table only) ---- */
+  const sortedForTable = [...leaderboard].sort((a, b) => {
+    const totalA =
+      (a.counts.misc || 0) +
+      (a.counts.event || 0) +
+      (a.counts.rp || 0) +
+      (a.counts.raid || 0);
+
+    const totalB =
+      (b.counts.misc || 0) +
+      (b.counts.event || 0) +
+      (b.counts.rp || 0) +
+      (b.counts.raid || 0);
+
+    return totalB - totalA;
   });
 
   ctx.font = "16px 'Times New Roman'";
   let displayedIdx = 0;
 
-  leaderboard.forEach(u => {
-    const hasActivity = ["misc","rp","raid","event"].some(type => {
-      if(type === "event") return (u.counts.event || 0) > 0;
-      return (u.contributors[type]?.length || 0) > 0;
-    });
-    if(!hasActivity) return;
+  sortedForTable.forEach(u => {
+    const hasActivity = ["misc", "event", "rp", "raid"].some(
+      type => (u.counts[type] || 0) > 0
+    );
+    if (!hasActivity) return;
 
-    const y = rightY + displayedIdx * rowHeight;
+    const y = tableY + displayedIdx * rowHeight;
 
-    ctx.fillStyle = displayedIdx % 2 === 0 ? "rgba(255,255,255,0.07)" : "transparent";
-    ctx.fillRect(rightX - 20, y, tableWidth, rowHeight);
+    ctx.fillStyle =
+      displayedIdx % 2 === 0 ? "rgba(255,255,255,0.07)" : "transparent";
+    ctx.fillRect(tableX, y, tableWidth, rowHeight);
 
     ctx.strokeStyle = "rgba(255,255,255,0.1)";
     ctx.lineWidth = 1;
-    let lineX = rightX - 20;
-    colWidths.forEach(width => {
+
+    let lineX = tableX;
+    colWidths.forEach(w => {
       ctx.beginPath();
       ctx.moveTo(lineX, y);
       ctx.lineTo(lineX, y + rowHeight);
       ctx.stroke();
-      lineX += width;
+      lineX += w;
     });
+
     ctx.beginPath();
-    ctx.moveTo(rightX - 20 + tableWidth, y);
-    ctx.lineTo(rightX - 20 + tableWidth, y + rowHeight);
+    ctx.moveTo(tableX + tableWidth, y);
+    ctx.lineTo(tableX + tableWidth, y + rowHeight);
     ctx.stroke();
 
     ctx.fillStyle = "#fff";
     ctx.textAlign = "center";
-    ctx.fillText(u.displayName, rightX + colWidths[0]/2, y + 28);
+    ctx.fillText(u.displayName, tableX + colWidths[0] / 2, y + 28);
 
-    let xOffset = rightX + colWidths[0];
-    ["misc","event","rp","raid"].forEach((type, i) => {
-  // Use total counts, not unique contributors
-  const count = u.counts[type] || 0;
-  ctx.fillStyle = typeColors[type];
-  ctx.fillText(count.toString(), xOffset + colWidths[i + 1]/2, y + 28);
-  xOffset += colWidths[i + 1];
-});
-
+    let cellX = tableX + colWidths[0];
+    ["misc", "event", "rp", "raid"].forEach((type, i) => {
+      ctx.fillStyle = typeColors[type];
+      ctx.fillText(
+        (u.counts[type] || 0).toString(),
+        cellX + colWidths[i + 1] / 2,
+        y + 28
+      );
+      cellX += colWidths[i + 1];
+    });
 
     displayedIdx++;
   });
