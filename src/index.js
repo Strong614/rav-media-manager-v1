@@ -14,6 +14,22 @@ import { recordPost } from "./analytics/analyticsStore.js";
 import { parsePostData } from "./utils/postParser.js";
 
 // ----------------------------
+// Global error logging
+// ----------------------------
+process.on("unhandledRejection", (err) => console.error("❌ UNHANDLED REJECTION:", err));
+process.on("uncaughtException", (err) => console.error("❌ UNCAUGHT EXCEPTION:", err));
+
+// ----------------------------
+// Debug: Environment variables
+// ----------------------------
+console.log("DEBUG ENV CHECK:", {
+  hasToken: !!process.env.DISCORD_TOKEN,
+  hasClientId: !!process.env.CLIENT_ID,
+  hasGuildId: !!process.env.RAV_GUILD_ID,
+  hasSourceChannel: !!process.env.SOURCE_CHANNEL_ID
+});
+
+// ----------------------------
 // Register slash commands
 // ----------------------------
 const commands = [
@@ -95,9 +111,12 @@ client.on("messageCreate", async (message) => {
 client.on("interactionCreate", handleInteraction);
 
 // ----------------------------
-// Login
+// Login with debug
 // ----------------------------
-client.login(process.env.DISCORD_TOKEN);
+console.log("DEBUG: Starting Discord login...");
+client.login(process.env.DISCORD_TOKEN)
+  .then(() => console.log("DEBUG: login() promise resolved"))
+  .catch(err => console.error("❌ LOGIN ERROR:", err));
 
 // ----------------------------
 // Web server for uptime
@@ -107,3 +126,4 @@ const PORT = process.env.PORT || 3000;
 
 app.get("/", (req, res) => res.send("Bot is alive!"));
 app.listen(PORT, () => console.log(`🌐 Web server running on port ${PORT}`));
+
