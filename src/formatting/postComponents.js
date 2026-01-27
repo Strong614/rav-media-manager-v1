@@ -11,33 +11,37 @@ function createGallery(urls) {
   if (!Array.isArray(urls)) return null;
 
   const items = urls
-    .filter((u) => typeof u === "string" && u.startsWith("http"))
+    .filter(u => typeof u === "string" && u.startsWith("http"))
     .slice(0, 10)
-    .map(
-      (url) =>
-        new MediaGalleryItemBuilder().setURL(url)
-    );
+    .map(url => new MediaGalleryItemBuilder().setURL(url));
 
   if (items.length === 0) return null;
 
   return new MediaGalleryBuilder().addItems(items);
 }
 
+/**
+ * Cleanly generate V2 components for a post.
+ * Always rebuilds from scratch — no duplication.
+ */
 export function generatePostComponents(postData) {
   const components = [];
 
-  // ───── Banner ─────
-  const bannerUrl = BANNERS[postData.type];
-  const banner = createGallery(bannerUrl ? [bannerUrl] : null);
-  if (banner) components.push(banner);
+  // Banner
+  if (BANNERS[postData.type]) {
+    const banner = createGallery([BANNERS[postData.type]]);
+    if (banner) components.push(banner);
+  }
 
+  // Divider
   components.push(new SeparatorBuilder().setDivider(true));
 
-  // ───── Text (always exists) ─────
+  // Text
   const textLines = [];
 
   switch (postData.type) {
     case "activity":
+    case "misc": // treat misc as activity for display
       textLines.push(`**Activity ${postData.postNumber ?? "N/A"}**`);
       textLines.push(`Type: ${postData.activityType ?? "N/A"}`);
       textLines.push(`Date: ${postData.date ?? "N/A"}`);
@@ -60,7 +64,6 @@ export function generatePostComponents(postData) {
       textLines.push(`**Date:** ${postData.date ?? "N/A"}`);
       break;
 
-
     default:
       textLines.push("Invalid post format");
   }
@@ -69,15 +72,17 @@ export function generatePostComponents(postData) {
     components.push(new TextDisplayBuilder().setContent(line));
   }
 
+  // Divider
   components.push(new SeparatorBuilder().setDivider(true));
 
-  // ───── Screenshots ─────
-  const screenshots = createGallery(postData.screenshotUrls);
-  if (screenshots) components.push(screenshots);
+  // Screenshots
+  if (postData.screenshotUrls && postData.screenshotUrls.length) {
+    const screenshots = createGallery(postData.screenshotUrls);
+    if (screenshots) components.push(screenshots);
+  }
 
-  // ───── Footer ─────
+  // Footer
   components.push(new SeparatorBuilder().setDivider(true));
-
   const footer = createGallery([BANNERS.bar]);
   if (footer) components.push(footer);
 

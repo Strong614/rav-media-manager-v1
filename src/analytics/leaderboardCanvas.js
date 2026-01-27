@@ -7,7 +7,7 @@ export async function generateDualLeaderboardImage(leaderboard, monthKey) {
 
   // Dynamic canvas width
   const width = Math.max(2000, 400 + numUsers * 80);
-  const height = 1000;
+  const height = 1200;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
 

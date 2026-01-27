@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 
 export async function generateActivityImage(stats, monthKey) {
   const width = 2000;
-  const height = 1000;
+  const height = 1200;
 
   const chartAreaWidth = Math.floor(width * 0.6);
   const tableAreaWidth = width - chartAreaWidth;

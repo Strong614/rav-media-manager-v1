@@ -5,60 +5,34 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   InteractionType,
-  ComponentType
+  ComponentType,
+  TextDisplayBuilder,
+  MessageFlags
 } from "discord.js";
 
 import {
   APPROVE_BUTTON_ID,
   REJECT_BUTTON_ID,
   DELETE_BUTTON_ID,
-  createDeleteRow
+  EDIT_BUTTON_ID, // NEW
+  DELETE_MIRRORED_BUTTON_ID, // NEW
+  createDeleteRow,
+  createModMirroredRow // NEW
 } from "../ui/actionRow.js";
 
 import { EmbedBuilder } from "discord.js";
 import { generatePostComponents } from "../formatting/postComponents.js";
 import { client } from "../client.js";
-import { recordPost } from "../analytics/analyticsStore.js"; // THIS handles counting
+import { recordPost } from "../analytics/analyticsStore.js"; 
 import { ravLeaderboardCommand } from "../commands/ravLeaderboard.js";
 import { ravActivityCommand } from "../commands/rav-activity.js";
-import { enforcePostFormat } from "../utils/postFormatValidator.js"; // adjust path
-import { TEMPLATE, EXAMPLES, detectPostType } from "../utils/postFormatValidator.js"; // import template & examples
+import { enforcePostFormat } from "../utils/postFormatValidator.js"; 
+import { TEMPLATE, EXAMPLES, detectPostType } from "../utils/postFormatValidator.js";
 
 const MEDIA_MANAGER_ROLE = "Media Manager";
 
-client.on("messageCreate", async (message) => {
-  if (message.author.bot) return;
-  if (message.channel.id !== process.env.SOURCE_CHANNEL_ID) return;
 
-  // Validate the post
-  const isValid = await enforcePostFormat(message, true); // true = auto-deleted
-
-  if (!isValid) {
-    try {
-      // Delete the original malformed post
-      await message.delete();
-
-      // Delete any bot moderation message replying to this post
-      const messages = await message.channel.messages.fetch({ limit: 20 });
-      const botMessage = messages.find(
-        m => m.author.id === client.user.id && m.reference?.messageId === message.id
-      );
-      if (botMessage) await botMessage.delete();
-
-      console.log(`[INFO] Deleted malformed post and moderation buttons from ${message.author.tag}`);
-    } catch (err) {
-      console.warn(`[WARN] Could not delete malformed post or buttons for ${message.author.tag}:`, err.message);
-    }
-
-    return; // stop further processing
-  }
-
-  // Valid post — stays for moderation buttons
-});
-
-/**
- * Disable all buttons in a bot-authored message
- */
+// Helper to disable buttons (your existing code)
 function disableButtons(message) {
   return message.components.map(row => {
     const newRow = new ActionRowBuilder();
@@ -73,54 +47,62 @@ function disableButtons(message) {
   });
 }
 
-/**
- * Extract post data from the original user message
- */
+// Parse post data (your existing code)
 function parsePostData(message) {
   const lines = message.content.split("\n");
   const postData = {};
-
   let postType;
 
-  if (lines.some(l => l.startsWith("Roleplay Story:"))) {
+  // Determine post type
+  if (lines.some(line => line.startsWith("Roleplay Story:"))) {
     postType = "rp";
-  } else if (lines.some(l => l.startsWith("Event Type:"))) {
+  } else if (lines.some(line => line.startsWith("Event Type:"))) {
     postType = "event";
   } else {
     postType = "activity";
   }
 
   for (const line of lines) {
-    if (line.startsWith("Post Number:"))
+    if (!postData.postNumber && line.startsWith("Post Number:")) {
       postData.postNumber = line.replace("Post Number:", "").trim();
+    }
 
-    if (line.startsWith("Date:"))
+    if (!postData.date && line.startsWith("Date:")) {
       postData.date = line.replace("Date:", "").trim();
+    }
 
-    if (line.startsWith("Activity type:"))
+    if (!postData.activityType && line.startsWith("Activity type:")) {
       postData.activityType = line.replace("Activity type:", "").trim();
+    }
 
-    if (line.startsWith("Participants:"))
+    if (!postData.participants && line.startsWith("Participants:")) {
       postData.participants = line.replace("Participants:", "").trim();
+    }
 
-    if (line.startsWith("Event Type:"))
+    if (!postData.eventType && line.startsWith("Event Type:")) {
       postData.eventType = line.replace("Event Type:", "").trim();
+    }
 
-    if (line.startsWith("Event Price:"))
+    if (!postData.eventPrice && line.startsWith("Event Price:")) {
       postData.eventPrice = line.replace("Event Price:", "").trim();
+    }
 
-    if (line.startsWith("Host:"))
+    if (!postData.host && line.startsWith("Host:")) {
       postData.host = line.replace("Host:", "").trim();
+    }
 
-    if (line.startsWith("Winner:"))
+    if (!postData.winner && line.startsWith("Winner:")) {
       postData.winner = line.replace("Winner:", "").trim();
+    }
 
-    // ───── ROLEPLAY ─────
-    if (line.startsWith("Roleplay Story:"))
+    // Roleplay-specific
+    if (!postData.story && line.startsWith("Roleplay Story:")) {
       postData.story = line.replace("Roleplay Story:", "").trim();
+    }
 
-    if (line.startsWith("Roleplay Participants:"))
+    if (!postData.participants && line.startsWith("Roleplay Participants:")) {
       postData.participants = line.replace("Roleplay Participants:", "").trim();
+    }
   }
 
   postData.type = postType;
@@ -131,25 +113,24 @@ function parsePostData(message) {
 }
 
 
+// Main interaction handler
 export async function handleInteraction(interaction) {
 
-  /* ───────── PERMISSION CHECK ───────── */
+  // Permission check (existing)
   if (
     interaction.isButton() &&
     !interaction.member.roles.cache.some(r => r.name === MEDIA_MANAGER_ROLE)
   ) {
     return interaction.reply({
       content: "❌ You are not allowed to perform this action (only RAV media managers).",
-      flags: 64 // EPHEMERAL
+      flags: 64
     });
   }
 
-  /* ───────── BUTTON INTERACTIONS ───────── */
+  // ───────── BUTTON INTERACTIONS ─────────
   if (interaction.isButton()) {
-
     const botMessage = interaction.message;
 
-    // Fetch referenced user post
     const sourceMessage = botMessage.reference
       ? await interaction.channel.messages
           .fetch(botMessage.reference.messageId)
@@ -165,53 +146,42 @@ export async function handleInteraction(interaction) {
 
     /* ───────── APPROVE ───────── */
     if (interaction.customId === APPROVE_BUTTON_ID) {
-      // Acknowledge interaction immediately
       await interaction.deferUpdate();
 
-      // Disable buttons instantly
       if (botMessage.components.length) {
         await botMessage.edit({
           components: disableButtons(botMessage)
         });
       }
 
-      // --- RECORD POST HERE ---
       const postData = parsePostData(sourceMessage);
-      recordPost(sourceMessage.author.id, postData); // <-- this updates activityStats
-
-      // DEBUG: log current activityStats for the month
-      const monthKey = new Date(sourceMessage.createdAt).getMonth() + 1;
-      console.log(`[DEBUG] Approved post for author ${sourceMessage.author.id}:`, postData);
+      recordPost(sourceMessage.author.id, postData);
 
       const { components, flags } = generatePostComponents(postData);
 
-      const targetChannel = await client.channels.fetch(
-        process.env.TARGET_CHANNEL_ID
-      );
+      const targetChannel = await client.channels.fetch(process.env.TARGET_CHANNEL_ID);
 
-      // Send post to target channel and CAPTURE the message
-      const publishedMessage = await targetChannel.send({
-        components,
-        flags
-      });
+      // Send post to target channel
+      const publishedMessage = await targetChannel.send({ components, flags });
 
       const timestamp = Math.floor(Date.now() / 1000);
-
       const typeLabel =
         postData.type === "rp"
           ? "Roleplay"
           : postData.type === "event"
           ? "Event"
           : "Activity";
-
       const postNumber = postData.postNumber ?? "N/A";
 
+      // NEW: add mod-only buttons for mirrored post management
       await botMessage.edit({
-        content:
-          `_Log — Post Type: ${typeLabel} | Post Number: ${postNumber} | Approved by ${interaction.user} at <t:${timestamp}:f> | [View Post](${publishedMessage.url})_`,
-        components: []
+        content: `_Log — Post Type: ${typeLabel} | Post Number: ${postNumber} | Approved by ${interaction.user} at <t:${timestamp}:f> | [View Post](${publishedMessage.url})_`,
+        components: [createModMirroredRow()]
       });
 
+      // NEW: store mapping source -> target message ID somewhere (in-memory or DB)
+      botMessage._mirroredId = publishedMessage.id;
+      botMessage._mirroredData = postData;
 
       return;
     }
@@ -237,15 +207,79 @@ export async function handleInteraction(interaction) {
         .setStyle(TextInputStyle.Paragraph)
         .setRequired(false);
 
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(noteInput)
-      );
+      modal.addComponents(new ActionRowBuilder().addComponents(noteInput));
 
       return interaction.showModal(modal);
     }
+
+    // ───────── NEW: Delete Mirrored ─────────
+    if (interaction.customId === DELETE_MIRRORED_BUTTON_ID) {
+      await interaction.deferReply({ ephemeral: true });
+
+      const targetId = botMessage._mirroredId; // get linked mirrored message
+      if (!targetId) return interaction.editReply("❌ No mirrored post found.");
+
+      try {
+        const targetChannel = await client.channels.fetch(process.env.TARGET_CHANNEL_ID);
+        const targetMsg = await targetChannel.messages.fetch(targetId);
+        
+        await targetMsg.delete();
+
+        const timestamp = Math.floor(Date.now() / 1000);
+        const typeLabel = botMessage._mirroredData?.type === "rp"
+          ? "Roleplay"
+          : botMessage._mirroredData?.type === "event"
+          ? "Event"
+          : "Activity";
+        const postNumber = botMessage._mirroredData?.postNumber ?? "N/A";
+
+        await botMessage.edit({
+          content: `_Log — Post Type: ${typeLabel} | Post Number: ${postNumber} | Deleted by ${interaction.user} at <t:${timestamp}:f>_`,
+          components: [],
+        });
+
+        interaction.editReply("🗑️ Mirrored post deleted successfully.");
+
+
+
+      } catch (err) {
+        console.error(err);
+        interaction.editReply("❌ Failed to delete mirrored post.");
+      }
+
+      return;
+    }
+
+    // ───────── NEW: Edit Mirrored ─────────
+    if (interaction.customId === EDIT_BUTTON_ID) {
+  const sourceMessage = interaction.message;
+  const sourceContent = sourceMessage.reference
+    ? await interaction.channel.messages
+        .fetch(sourceMessage.reference.messageId)
+        .then(msg => msg.content)
+        .catch(() => "")
+    : "";
+
+  const modal = new ModalBuilder()
+    .setCustomId(`edit_mirrored_${sourceMessage.id}`)
+    .setTitle("Edit Mirrored Post");
+
+  const textInput = new TextInputBuilder()
+    .setCustomId("edit_text")
+    .setLabel("Edit the post content")
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(true)
+    .setValue(sourceContent); // prefill with the original post
+
+  modal.addComponents(new ActionRowBuilder().addComponents(textInput));
+
+  return interaction.showModal(modal);
+}
+
+
   }
 
-  /* ───────── SLASH COMMANDS ───────── */
+  // ───────── SLASH COMMANDS (unchanged) ─────────
   if (interaction.isChatInputCommand()) {
     try {
       if (interaction.commandName === "rav-leaderboard") {
@@ -259,7 +293,6 @@ export async function handleInteraction(interaction) {
       }
     } catch (error) {
       console.error("Slash command error:", error);
-
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
           content: "❌ An error occurred while executing this command.",
@@ -269,63 +302,146 @@ export async function handleInteraction(interaction) {
     }
   }
 
- /* ───────── MODAL SUBMISSION ───────── */
-if (interaction.type === InteractionType.ModalSubmit) {
-  if (!interaction.customId.startsWith("delete_modal_")) return;
+  // ───────── MODAL SUBMISSION ─────────
+  if (interaction.type === InteractionType.ModalSubmit) {
+    // DELETE modal (existing logic)
+    if (interaction.customId.startsWith("delete_modal_")) {
+      await interaction.deferReply({ flags: 64 });
+      const messageId = interaction.customId.replace("delete_modal_", "");
+      const note = interaction.fields.getTextInputValue("delete_note");
+      const channel = interaction.channel;
 
+      const sourceMessage = await channel.messages.fetch(messageId).catch(() => null);
+      if (!sourceMessage) return interaction.editReply("❌ Original post not found.");
+      await sourceMessage.delete().catch(() => {});
+
+      const messages = await channel.messages.fetch({ limit: 20 });
+      const moderationMessage = messages.find(
+        m =>
+          m.author.id === interaction.client.user.id &&
+          m.reference?.messageId === messageId
+      );
+      if (moderationMessage) await moderationMessage.edit({ content: `Post was deleted by ${interaction.user}.`, components: [] });
+
+      try {
+        const postType = detectPostType(sourceMessage.content);
+        const embed = new EmbedBuilder()
+          .setTitle("📝 Post Deleted")
+          .setDescription(`Your ${postType} post was deleted by **${interaction.member.displayName}**.`)
+          .addFields({ name: "Reason", value: note || "No reason provided" })
+          .setColor(0xA2C6CA)
+          .setTimestamp()
+          .setFooter({ text: "Please review the post format before submitting again." });
+
+        await sourceMessage.author.send({ embeds: [embed] });
+      } catch (err) {
+        console.warn(`Could not DM ${sourceMessage.author.tag}:`, err.message);
+      }
+
+      return interaction.editReply("✅ Post deleted and moderation message updated.");
+
+    }
+
+    // ───────── NEW: Edit Mirrored Modal Submission ─────────
+
+
+// ───────── EDIT MIRRORED MODAL SUBMISSION ─────────
+if (interaction.customId.startsWith("edit_mirrored_")) {
   await interaction.deferReply({ flags: 64 });
 
-  const messageId = interaction.customId.replace("delete_modal_", "");
-  const note = interaction.fields.getTextInputValue("delete_note");
-  const channel = interaction.channel;
-
-  const sourceMessage = await channel.messages
-    .fetch(messageId)
+  const sourceMessageId = interaction.customId.replace("edit_mirrored_", "");
+  const botMessage = await interaction.channel.messages
+    .fetch(sourceMessageId)
     .catch(() => null);
+  if (!botMessage) return interaction.editReply("❌ Source message not found.");
 
-  if (!sourceMessage) {
-    return interaction.editReply("❌ Original post not found.");
-  }
+  const originalPostData = botMessage._mirroredData;
+  if (!originalPostData) return interaction.editReply("❌ Original post data missing.");
 
-  await sourceMessage.delete().catch(() => {});
+  try {
+    // Collect new values from modal (text input for simplicity)
+    const newContent = interaction.fields.getTextInputValue("edit_text");
 
-  const messages = await channel.messages.fetch({ limit: 20 });
-  const moderationMessage = messages.find(
-    m =>
-      m.author.id === interaction.client.user.id &&
-      m.reference?.messageId === messageId
-  );
+    // Parse new content into fields (like parsePostData)
+    const lines = newContent.split("\n").map(l => l.trim());
+    const updatedPostData = { ...originalPostData };
 
-  if (moderationMessage) {
-    await moderationMessage.edit({
-      content: `Post was deleted by ${interaction.user}.`,
-      components: []
+    for (const line of lines) {
+      if (line.startsWith("Post Number:")) updatedPostData.postNumber = line.replace("Post Number:", "").trim();
+      else if (line.startsWith("Activity type:") || line.startsWith("Type:")) {
+        // ✅ Always store in activityType
+        updatedPostData.activityType = line.split(":")[1].trim();
+      }
+      else if (line.startsWith("Date:")) updatedPostData.date = line.replace("Date:", "").trim();
+      else if (line.startsWith("Participants:")) updatedPostData.participants = line.replace("Participants:", "").trim();
+      else if (line.startsWith("Winner:")) updatedPostData.winner = line.replace("Winner:", "").trim();
+      else if (line.startsWith("Host:")) updatedPostData.host = line.replace("Host:", "").trim();
+      else if (line.startsWith("Event Type:")) updatedPostData.eventType = line.replace("Event Type:", "").trim();
+      else if (line.startsWith("Event Price:")) updatedPostData.eventPrice = line.replace("Event Price:", "").trim();
+      else if (line.startsWith("Roleplay Story:")) updatedPostData.story = line.replace("Roleplay Story:", "").trim();
+      else if (line.startsWith("Roleplay Participants:")) updatedPostData.roleplayParticipants = line.replace("Roleplay Participants:", "").trim();
+    }
+
+    // Normalize participants for RP
+    if (updatedPostData.type === "rp") {
+      updatedPostData.participants = updatedPostData.roleplayParticipants || "";
+    }
+
+    // Split participants robustly
+    if (updatedPostData.participants) {
+      let normalized = updatedPostData.participants
+        .replace(/\s+(and)\s+/gi, ",")
+        .replace(/\s*\/\s*/g, ",")
+        .replace(/\s*&\s*/g, ",")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+
+      updatedPostData.participantsArray = normalized
+        .split(",")
+        .map(p => p.trim())
+        .filter(p => p);
+    }
+
+    // Rebuild message completely
+    // ✅ generatePostComponents will now always display "Type: <activityType>" instead of "Activity type:"
+    const { components, flags } = generatePostComponents(updatedPostData);
+
+    const targetId = botMessage._mirroredId;
+    if (!targetId) return interaction.editReply("❌ Mirrored post not found.");
+
+    const targetChannel = await client.channels.fetch(process.env.TARGET_CHANNEL_ID);
+    const targetMsg = await targetChannel.messages.fetch(targetId);
+
+    // ✅ Replace old components with fresh ones
+    await targetMsg.edit({
+      content: null,
+      components,
+      flags,
     });
+
+        const timestamp = Math.floor(Date.now() / 1000);
+    const typeLabel = updatedPostData.type === "rp"
+      ? "Roleplay"
+      : updatedPostData.type === "event"
+      ? "Event"
+      : "Activity";
+    const postNumber = updatedPostData.postNumber ?? "N/A";
+
+    await botMessage.edit({
+      content: `_Log — Post Type: ${typeLabel} | Post Number: ${postNumber} | Edited by ${interaction.user} at <t:${timestamp}:f> | [View Post](${targetMsg.url})_`,
+      components: [createModMirroredRow()],
+    });
+
+
+    // Save updated data for future edits
+    botMessage._mirroredData = updatedPostData;
+
+    return interaction.editReply("✏️ Mirrored post edited successfully.");
+  } catch (err) {
+    console.error(err);
+    return interaction.editReply("❌ Failed to edit mirrored post.");
   }
-
- // ───── SEND DM WITH REASON + FORMATTING ─────
-try {
-  const postType = detectPostType(sourceMessage.content); // detect type from deleted message
-
-  const embed = new EmbedBuilder()
-    .setTitle("📝 Post Deleted")
-    .setDescription(
-      `Your ${postType} post was deleted by **${interaction.member.displayName}**.`
-    )
-    .addFields(
-      { name: "Reason", value: note || "No reason provided" }
-    )
-    .setColor(0xA2C6CA)
-    .setTimestamp()
-    .setFooter({ text: "Please review the post format before submitting again." });
-
-  await sourceMessage.author.send({ embeds: [embed] });
-} catch (err) {
-  console.warn(`Could not DM ${sourceMessage.author.tag}:`, err.message);
 }
 
-return interaction.editReply(
-  "✅ Post deleted and moderation message updated."
-);
-}
+  }
 }
