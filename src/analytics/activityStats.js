@@ -1,52 +1,93 @@
 import { classifyPost } from "./classifyPost.js";
-import { parsePostData } from "../utils/postParser.js"; // your parser
+import { parsePostData } from "../utils/postParser.js";
 
-// Stores all stats under a single "all" key for now
+// Per-month stats store
 export const activityStats = {};
 
-/**
- * Record a single post
- */
-export function recordActivityPost(postData) {
+/* ───────── Rav Month Helpers ───────── */
+
+function getRavMonthRange(monthKey) {
+  const [yearStr, monthStr] = monthKey.split("-");
+  const year = parseInt(yearStr);
+  const month = parseInt(monthStr);
+
+  // Start = 27th of previous month
+  let startMonth = month - 1;
+  let startYear = year;
+  if (startMonth < 1) {
+    startMonth = 12;
+    startYear -= 1;
+  }
+
+  const start = new Date(startYear, startMonth - 1, 27, 0, 0, 0);
+
+  // End = 26th of this month
+  const end = new Date(year, month - 1, 26, 23, 59, 59);
+
+  return { start, end };
+}
+
+function isDateInRavMonth(date, monthKey) {
+  if (!(date instanceof Date)) return false;
+  const { start, end } = getRavMonthRange(monthKey);
+  return date >= start && date <= end;
+}
+
+/* ───────── Core Recording ───────── */
+
+export function recordActivityPost(postData, monthKey) {
   const category = classifyPost(postData);
 
-  // Ensure structure exists
-  if (!activityStats["all"]) activityStats["all"] = {};
-  if (!activityStats["users"]) activityStats["users"] = {};
+  // Ensure per-month structure
+  if (!activityStats[monthKey]) {
+    activityStats[monthKey] = { all: {}, users: {} };
+  }
+
+  const monthStats = activityStats[monthKey];
 
   const categories = ["misc", "event", "roleplay", "raid", "activity"];
   for (const cat of categories) {
-    if (!(cat in activityStats["all"])) activityStats["all"][cat] = 0;
+    if (!(cat in monthStats.all)) monthStats.all[cat] = 0;
   }
 
-  // global category count
-  activityStats["all"][category] += 1;
+  // Per-month global
+  monthStats.all[category] += 1;
 
-  // --- PER-USER COUNT FIX HERE ---
+  // Per-month per-user
   for (const p of postData.participantsArray) {
-    if (!activityStats["users"][p]) {
-      activityStats["users"][p] = { misc: 0, event: 0, roleplay: 0, raid: 0 };
+    if (!monthStats.users[p]) {
+      monthStats.users[p] = {
+        misc: 0,
+        event: 0,
+        roleplay: 0,
+        raid: 0,
+        activity: 0
+      };
     }
 
-    // only increment the four main public categories
-    if (category in activityStats["users"][p]) {
-      activityStats["users"][p][category] += 1;
+    if (category in monthStats.users[p]) {
+      monthStats.users[p][category] += 1;
     }
   }
 
-  console.log(`[DEBUG] Recorded post: Category=${category}, Users=${postData.participantsArray}`);
+  console.log(`[DEBUG] [${monthKey}] Recorded post: ${category}`);
 }
 
+/* ───────── Bulk Recording (WITH FILTER) ───────── */
 
-/**
- * Bulk record from messages
- */
-export function recordActivityFromMessages(messages) {
+export function recordActivityFromMessages(messages, monthKey, { reset = false } = {}) {
+  // Only reset if explicitly requested
+  if (reset || !activityStats[monthKey]) {
+    activityStats[monthKey] = { all: {}, users: {} };
+  }
+
   messages.forEach((msg) => {
     try {
+      // FILTER BY RAV MONTH WINDOW (27 → 26)
+      if (!isDateInRavMonth(msg.createdAt, monthKey)) return;
+
       const postData = parsePostData(msg);
-      console.log("[DEBUG] Parsed postData:", postData);
-      recordActivityPost(postData);
+      recordActivityPost(postData, monthKey);
     } catch (err) {
       console.warn("[DEBUG] Failed to parse message:", msg.id, err);
     }
