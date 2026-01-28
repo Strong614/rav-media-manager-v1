@@ -63,4 +63,28 @@ export function recordActivityFromMessages(messages, { reset = false } = {}) {
     }
   });
 }
-export { getRavMonthRange };
+
+/* ───────── Rav Month Range ───────── */
+export function getRavMonthRange(monthKey) {
+  // monthKey: "YYYY-MM"
+  const [yearStr, monthStr] = monthKey.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+
+  if (!year || !month) throw new Error(`Invalid monthKey: ${monthKey}`);
+
+  // Start date: 27th of previous month
+  let startMonth = month - 1;
+  let startYear = year;
+  if (startMonth < 1) {
+    startMonth = 12;
+    startYear -= 1;
+  }
+  const start = new Date(startYear, startMonth - 1, 27, 0, 0, 0, 0);
+
+  // End date: 26th of this month
+  const end = new Date(year, month - 1, 26, 23, 59, 59, 999);
+
+  return { start, end };
+}
+
