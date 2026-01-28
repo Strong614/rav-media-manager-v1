@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } from "discord.js";
-import { activityStats, getCurrentRavMonthKey } from "../analytics/activityStats.js";
+import { activityStats, getRavMonthRange } from "../analytics/activityStats.js";
 import { generateActivityImage } from "../analytics/activityCanvas.js";
 
 export const ravActivityCommand = {
@@ -21,21 +21,34 @@ export const ravActivityCommand = {
     await interaction.deferReply();
 
     try {
-      // Use user-supplied month if present, else compute current Rav month
       let monthKey = interaction.options.getString("month");
-      if (!monthKey) monthKey = getCurrentRavMonthKey();
+
+      // If user supplied a month, adjust to Rav month key by checking date range
+      if (monthKey) {
+        // Find the Rav month key that covers this calendar month
+        const [year, month] = monthKey.split("-").map(Number);
+        if (!year || !month) {
+          return interaction.editReply("❌ Invalid month format. Use YYYY-MM.");
+        }
+
+        // Search activityStats for a month that overlaps this calendar month
+        monthKey = Object.keys(activityStats).find(key => {
+          const { start, end } = getRavMonthRange(key);
+          const monthStart = new Date(year, month - 1, 1);
+          const monthEnd = new Date(year, month, 0, 23, 59, 59);
+          // Overlap check
+          return start <= monthEnd && end >= monthStart;
+        }) || monthKey; // fallback to requested key
+      }
 
       const statsObj = activityStats[monthKey];
       if (!statsObj || !statsObj.all) {
         return interaction.editReply({ content: `No activity data recorded yet for ${monthKey}.` });
       }
 
-      // Ensure all categories exist
       const categories = ["misc", "event", "roleplay", "raid", "activity"];
       const stats = {};
-      for (const cat of categories) {
-        stats[cat] = statsObj.all[cat] || 0;
-      }
+      for (const cat of categories) stats[cat] = statsObj.all[cat] || 0;
 
       const buffer = await generateActivityImage(stats, monthKey);
       const attachment = new AttachmentBuilder(buffer, { name: "activity.png" });
