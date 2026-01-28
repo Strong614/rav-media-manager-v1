@@ -6,12 +6,38 @@ export const activityStats = {};
 
 /* ───────── Rav Month Helpers ───────── */
 
+// PUBLIC EXPORT — REQUIRED BY index.js
+export function getCurrentRavMonthKey(date = new Date()) {
+  const d = new Date(date);
+  if (isNaN(d)) throw new Error("Invalid date passed to getCurrentRavMonthKey");
+
+  let year = d.getFullYear();
+  let month = d.getMonth() + 1; // 1-12
+
+  // If before 27th, Rav month is previous calendar month
+  if (d.getDate() < 27) {
+    month -= 1;
+    if (month < 1) {
+      month = 12;
+      year -= 1;
+    }
+  }
+
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
 function getRavMonthRange(monthKey) {
-  if (!monthKey) throw new Error("monthKey is required");
+  if (!monthKey) {
+    throw new Error("getRavMonthRange called without monthKey");
+  }
 
   const [yearStr, monthStr] = monthKey.split("-");
-  const year = parseInt(yearStr);
-  const month = parseInt(monthStr);
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+
+  if (!year || !month) {
+    throw new Error(`Invalid monthKey format: ${monthKey}`);
+  }
 
   // Start = 27th of previous month
   let startMonth = month - 1;
@@ -31,6 +57,7 @@ function getRavMonthRange(monthKey) {
 
 function isDateInRavMonth(date, monthKey) {
   if (!date) return false;
+
   const d = new Date(date);
   if (isNaN(d)) return false;
 
@@ -38,10 +65,13 @@ function isDateInRavMonth(date, monthKey) {
   return d >= start && d <= end;
 }
 
-
 /* ───────── Core Recording ───────── */
 
 export function recordActivityPost(postData, monthKey) {
+  if (!monthKey) {
+    throw new Error("recordActivityPost called without monthKey");
+  }
+
   const category = classifyPost(postData);
 
   // Ensure per-month structure
@@ -82,7 +112,11 @@ export function recordActivityPost(postData, monthKey) {
 /* ───────── Bulk Recording (WITH FILTER) ───────── */
 
 export function recordActivityFromMessages(messages, monthKey, { reset = false } = {}) {
-  // Only reset if explicitly requested
+  if (!monthKey) {
+    throw new Error("recordActivityFromMessages called without monthKey");
+  }
+
+  // Only reset if explicitly requested or missing
   if (reset || !activityStats[monthKey]) {
     activityStats[monthKey] = { all: {}, users: {} };
   }
