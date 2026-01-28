@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } from "discord.js";
-import { activityStats, getRavMonthRange } from "../analytics/activityStats.js";
+import { activityStats, getCurrentRavMonthKey, getRavMonthRange } from "../analytics/activityStats.js";
 import { generateActivityImage } from "../analytics/activityCanvas.js";
 
 export const ravActivityCommand = {
@@ -23,22 +23,25 @@ export const ravActivityCommand = {
     try {
       let monthKey = interaction.options.getString("month");
 
-      // If user supplied a month, adjust to Rav month key by checking date range
-      if (monthKey) {
-        // Find the Rav month key that covers this calendar month
+      // If no month provided, use current Rav month
+      if (!monthKey) {
+        monthKey = getCurrentRavMonthKey();
+      } else {
+        // Validate format YYYY-MM
         const [year, month] = monthKey.split("-").map(Number);
-        if (!year || !month) {
+        if (!year || !month || month < 1 || month > 12) {
           return interaction.editReply("❌ Invalid month format. Use YYYY-MM.");
         }
 
-        // Search activityStats for a month that overlaps this calendar month
-        monthKey = Object.keys(activityStats).find(key => {
+        // Try to find the Rav month that overlaps the requested calendar month
+        const matchingKey = Object.keys(activityStats).find(key => {
           const { start, end } = getRavMonthRange(key);
           const monthStart = new Date(year, month - 1, 1);
           const monthEnd = new Date(year, month, 0, 23, 59, 59);
-          // Overlap check
           return start <= monthEnd && end >= monthStart;
-        }) || monthKey; // fallback to requested key
+        });
+
+        if (matchingKey) monthKey = matchingKey;
       }
 
       const statsObj = activityStats[monthKey];
@@ -46,6 +49,7 @@ export const ravActivityCommand = {
         return interaction.editReply({ content: `No activity data recorded yet for ${monthKey}.` });
       }
 
+      // Ensure all categories exist
       const categories = ["misc", "event", "roleplay", "raid", "activity"];
       const stats = {};
       for (const cat of categories) stats[cat] = statsObj.all[cat] || 0;
