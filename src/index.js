@@ -18,7 +18,6 @@ import {
 import { recordPost } from "./analytics/analyticsStore.js";
 import { parsePostData } from "./utils/postParser.js";
 
-
 // ----------------------------
 // Global error logging
 // ----------------------------
@@ -74,35 +73,56 @@ client.once("ready", async () => {
     console.warn("❌ Could not set presence:", err);
   }
 
-// ----------------------------
-// Fetch historical posts
-// ----------------------------
-try {
-  const sourceChannel = await client.channels.fetch(process.env.SOURCE_CHANNEL_ID);
-  let messages = await sourceChannel.messages.fetch({ limit: 100 });
-  let lastId = messages.last()?.id;
+  // ----------------------------
+  // Robust historical fetch
+  // ----------------------------
+  try {
+    const sourceChannel = await client.channels.fetch(process.env.SOURCE_CHANNEL_ID);
+    let lastId = undefined;
+    let hasMore = true;
 
-  while (messages.size > 0 && lastId) {
-    // Record each message into the correct Rav month
-    messages.forEach(msg => {
-      try {
-        const postData = parsePostData(msg);
-        recordPostsFromMessages([msg]); // Leaderboard stats
-        recordActivityPost(postData, getCurrentRavMonthKey(msg.createdAt)); // Correct month per message
-      } catch (err) {
-        console.warn(`[DEBUG] Failed to record historical message ${msg.id}:`, err);
+    while (hasMore) {
+      let messages;
+      let retryCount = 0;
+      const maxRetries = 5;
+
+      while (retryCount < maxRetries) {
+        try {
+          messages = await sourceChannel.messages.fetch({ limit: 50, before: lastId });
+          break;
+        } catch (err) {
+          retryCount++;
+          console.warn(`[WARN] Failed to fetch messages (attempt ${retryCount}):`, err);
+          await new Promise(res => setTimeout(res, 1500));
+          if (retryCount === maxRetries) throw err;
+        }
       }
-    });
 
-    messages = await sourceChannel.messages.fetch({ limit: 100, before: lastId });
-    lastId = messages.last()?.id;
+      if (!messages || messages.size === 0) {
+        hasMore = false;
+        break;
+      }
+
+      // Record messages individually with correct monthKey
+      for (const msg of messages.values()) {
+        try {
+          const postData = parsePostData(msg);
+          recordPostsFromMessages([msg]); // Leaderboard stats
+          const monthKey = getCurrentRavMonthKey(msg.createdAt);
+          recordActivityPost(postData, monthKey); // Activity stats
+        } catch (err) {
+          console.warn(`[DEBUG] Failed to record historical message ${msg.id}:`, err);
+        }
+      }
+
+      lastId = messages.last()?.id;
+      if (!lastId) hasMore = false;
+    }
+
+    console.log("✅ Recorded all existing posts from source channel.");
+  } catch (err) {
+    console.error("❌ Error fetching historical messages:", err);
   }
-
-  console.log("✅ Recorded all existing posts from source channel.");
-} catch (err) {
-  console.error("❌ Error fetching historical messages:", err);
-}
-
 });
 
 // ----------------------------
@@ -142,4 +162,3 @@ const PORT = process.env.PORT || 3000;
 
 app.get("/", (req, res) => res.send("Bot is alive!"));
 app.listen(PORT, () => console.log(`🌐 Web server running on port ${PORT}`));
-
