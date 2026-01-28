@@ -106,3 +106,4 @@ export function recordActivityFromMessages(messages, { reset = false } = {}) {
     posts.forEach((postData) => recordActivityPost(postData, monthKey));
   }
 }
+export { getRavMonthRange };
