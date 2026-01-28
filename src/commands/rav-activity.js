@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } from "discord.js";
-import { activityStats, getCurrentRavMonthKey, getRavMonthRange } from "../analytics/activityStats.js";
+import { activityStats } from "../analytics/activityStats.js";
 import { generateActivityImage } from "../analytics/activityCanvas.js";
 
 export const ravActivityCommand = {
@@ -23,25 +23,26 @@ export const ravActivityCommand = {
     try {
       let monthKey = interaction.options.getString("month");
 
-      // If no month provided, use current Rav month
       if (!monthKey) {
-        monthKey = getCurrentRavMonthKey();
+        // Hardcoded 27th-rollover logic (same as leaderboard)
+        const now = new Date();
+        let year = now.getFullYear();
+        let month = now.getMonth() + 1;
+        if (now.getDate() >= 27) {
+          month += 1;
+          if (month > 12) {
+            month = 1;
+            year += 1;
+          }
+        }
+        monthKey = `${year}-${String(month).padStart(2, "0")}`;
       } else {
         // Validate format YYYY-MM
         const [year, month] = monthKey.split("-").map(Number);
         if (!year || !month || month < 1 || month > 12) {
           return interaction.editReply("❌ Invalid month format. Use YYYY-MM.");
         }
-
-        // Try to find the Rav month that overlaps the requested calendar month
-        const matchingKey = Object.keys(activityStats).find(key => {
-          const { start, end } = getRavMonthRange(key);
-          const monthStart = new Date(year, month - 1, 1);
-          const monthEnd = new Date(year, month, 0, 23, 59, 59);
-          return start <= monthEnd && end >= monthStart;
-        });
-
-        if (matchingKey) monthKey = matchingKey;
+        // Keep monthKey exactly as entered
       }
 
       const statsObj = activityStats[monthKey];
