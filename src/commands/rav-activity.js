@@ -18,29 +18,20 @@ export const ravActivityCommand = {
       return interaction.reply({ content: "This command can only be used in the designated channels.", ephemeral: true });
     }
 
-    // Defer reply to allow time for generating image
     await interaction.deferReply();
 
     try {
-      // Determine monthKey
-      let monthKey = interaction.options.getString("month");
-      if (!monthKey) monthKey = getCurrentRavMonthKey();
-
+      let monthKey = interaction.options.getString("month") || getCurrentRavMonthKey();
       const statsObj = activityStats[monthKey];
-      if (!statsObj || !statsObj.all) {
+
+      if (!statsObj || !statsObj.all || Object.keys(statsObj.all).length === 0) {
         return interaction.editReply({ content: `No activity data recorded yet for ${monthKey}.` });
       }
 
-      // Use only the per-category stats
       const stats = statsObj.all;
-
-      // Safety: ensure all categories exist
       const categories = ["misc", "event", "roleplay", "raid", "activity"];
-      for (const cat of categories) {
-        if (!(cat in stats)) stats[cat] = 0;
-      }
+      for (const cat of categories) if (!(cat in stats)) stats[cat] = 0;
 
-      // Generate canvas
       const buffer = await generateActivityImage(stats, monthKey);
       const attachment = new AttachmentBuilder(buffer, { name: "activity.png" });
 
