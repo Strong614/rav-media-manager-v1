@@ -8,32 +8,52 @@ export const ravActivityCommand = {
     .setDescription("Show RAV activity breakdown")
     .addStringOption(option =>
       option.setName("month")
-            .setDescription("Month in YYYY-MM format")
+            .setDescription("Month in YYYY-MM format (e.g., 2026-01)")
             .setRequired(false)
     ),
 
   async execute(interaction) {
     const ALLOWED_CHANNELS = ["1361026129300815993", "1459687645629386836"];
-    if (!ALLOWED_CHANNELS.includes(interaction.channelId))
+    if (!ALLOWED_CHANNELS.includes(interaction.channelId)) {
       return interaction.reply({ content: "This command can only be used in the designated channels.", ephemeral: true });
+    }
 
-    // Get monthKey from option or compute current Rav month
-    let monthKey = interaction.options.getString("month");
-    if (!monthKey) monthKey = getCurrentRavMonthKey();
+    // Defer reply to allow time for generating image
+    await interaction.deferReply();
 
-    const stats = activityStats[monthKey];  // <-- FIX: use monthKey
-    if (!stats) return interaction.reply({ content: "No activity data recorded yet for this month.", ephemeral: true });
+    try {
+      // Determine monthKey
+      let monthKey = interaction.options.getString("month");
+      if (!monthKey) monthKey = getCurrentRavMonthKey();
 
-    // Generate canvas from latest stats
-    const buffer = await generateActivityImage(stats, monthKey);
-    const attachment = new AttachmentBuilder(buffer, { name: "activity.png" });
+      const statsObj = activityStats[monthKey];
+      if (!statsObj || !statsObj.all) {
+        return interaction.editReply({ content: `No activity data recorded yet for ${monthKey}.` });
+      }
 
-    const embed = new EmbedBuilder()
-      .setTitle(`RAV Activity Overview — ${monthKey}`)
-      .setColor(0xA2C6CA)
-      .setImage("attachment://activity.png");
+      // Use only the per-category stats
+      const stats = statsObj.all;
 
-    // Reply to the interaction
-    await interaction.reply({ embeds: [embed], files: [attachment] });
+      // Safety: ensure all categories exist
+      const categories = ["misc", "event", "roleplay", "raid", "activity"];
+      for (const cat of categories) {
+        if (!(cat in stats)) stats[cat] = 0;
+      }
+
+      // Generate canvas
+      const buffer = await generateActivityImage(stats, monthKey);
+      const attachment = new AttachmentBuilder(buffer, { name: "activity.png" });
+
+      const embed = new EmbedBuilder()
+        .setTitle(`RAV Activity Overview — ${monthKey}`)
+        .setColor(0xA2C6CA)
+        .setImage("attachment://activity.png");
+
+      await interaction.editReply({ embeds: [embed], files: [attachment] });
+
+    } catch (err) {
+      console.error("❌ Error executing /rav-activity:", err);
+      await interaction.editReply({ content: "An error occurred while generating the activity chart." });
+    }
   }
 };
