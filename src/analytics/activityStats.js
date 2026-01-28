@@ -6,7 +6,6 @@ export const activityStats = {};
 
 /* ───────── Rav Month Helpers ───────── */
 
-// PUBLIC EXPORT — REQUIRED BY index.js
 export function getCurrentRavMonthKey(date = new Date()) {
   const d = new Date(date);
   if (isNaN(d)) throw new Error("Invalid date passed to getCurrentRavMonthKey");
@@ -31,7 +30,7 @@ function getRavMonthRange(monthKey) {
   const year = parseInt(yearStr, 10);
   const month = parseInt(monthStr, 10);
 
-  if (!year || !month) throw new Error(`Invalid monthKey: ${monthKey}`);
+  if (!year || !month) throw new Error(`Invalid monthKey format: ${monthKey}`);
 
   let startMonth = month - 1;
   let startYear = year;
@@ -42,12 +41,15 @@ function getRavMonthRange(monthKey) {
 
   const start = new Date(startYear, startMonth - 1, 27, 0, 0, 0, 0);
   const end = new Date(year, month - 1, 26, 23, 59, 59, 999);
+
   return { start, end };
 }
 
 function isDateInRavMonth(date, monthKey) {
+  if (!date) return false;
   const d = new Date(date);
   if (isNaN(d)) return false;
+
   const { start, end } = getRavMonthRange(monthKey);
   return d >= start && d <= end;
 }
@@ -61,37 +63,46 @@ export function recordActivityPost(postData, monthKey) {
 
   // Ensure per-month structure
   if (!activityStats[monthKey]) activityStats[monthKey] = { all: {}, users: {} };
-
   const monthStats = activityStats[monthKey];
 
   const categories = ["misc", "event", "roleplay", "raid", "activity"];
   for (const cat of categories) if (!(cat in monthStats.all)) monthStats.all[cat] = 0;
 
-  // Per-month global
+  // Increment global count
   monthStats.all[category] += 1;
 
-  // Per-month per-user
+  // Increment per-user counts
   for (const p of postData.participantsArray) {
     if (!monthStats.users[p]) {
       monthStats.users[p] = { misc: 0, event: 0, roleplay: 0, raid: 0, activity: 0 };
     }
     monthStats.users[p][category] += 1;
   }
-
-  console.log(`[DEBUG] [${monthKey}] Recorded post: ${category}`);
 }
 
-/* ───────── Bulk Recording ───────── */
+/* ───────── Bulk Recording (multi-month aware) ───────── */
 
 export function recordActivityFromMessages(messages, { reset = false } = {}) {
+  // Group messages by monthKey
+  const monthMap = {};
+
   messages.forEach((msg) => {
     try {
       const postData = parsePostData(msg);
-      const monthKey = getCurrentRavMonthKey(msg.createdAt); // <-- assign to correct Rav month
-      if (reset || !activityStats[monthKey]) activityStats[monthKey] = { all: {}, users: {} };
-      recordActivityPost(postData, monthKey);
+      const monthKey = getCurrentRavMonthKey(msg.createdAt);
+
+      if (!monthMap[monthKey]) monthMap[monthKey] = [];
+      monthMap[monthKey].push(postData);
     } catch (err) {
-      console.warn("[DEBUG] Failed to parse message:", msg.id, err);
+      console.warn(`[DEBUG] Failed to parse message ${msg.id}:`, err);
     }
   });
+
+  // Record each month separately
+  for (const [monthKey, posts] of Object.entries(monthMap)) {
+    if (reset || !activityStats[monthKey]) {
+      activityStats[monthKey] = { all: {}, users: {} };
+    }
+    posts.forEach((postData) => recordActivityPost(postData, monthKey));
+  }
 }
