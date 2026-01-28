@@ -18,10 +18,10 @@ export const ravActivityCommand = {
       return interaction.reply({ content: "This command can only be used in the designated channels.", ephemeral: true });
     }
 
-    // Defer reply to allow time for generating image
     await interaction.deferReply();
 
     try {
+      // Use user-supplied month if present, else compute current Rav month
       let monthKey = interaction.options.getString("month");
       if (!monthKey) monthKey = getCurrentRavMonthKey();
 
@@ -31,9 +31,11 @@ export const ravActivityCommand = {
       }
 
       // Ensure all categories exist
-      const stats = { ...statsObj.all };
       const categories = ["misc", "event", "roleplay", "raid", "activity"];
-      for (const cat of categories) if (!(cat in stats)) stats[cat] = 0;
+      const stats = {};
+      for (const cat of categories) {
+        stats[cat] = statsObj.all[cat] || 0;
+      }
 
       const buffer = await generateActivityImage(stats, monthKey);
       const attachment = new AttachmentBuilder(buffer, { name: "activity.png" });
@@ -44,7 +46,6 @@ export const ravActivityCommand = {
         .setImage("attachment://activity.png");
 
       await interaction.editReply({ embeds: [embed], files: [attachment] });
-
     } catch (err) {
       console.error("❌ Error executing /rav-activity:", err);
       await interaction.editReply({ content: "An error occurred while generating the activity chart." });
