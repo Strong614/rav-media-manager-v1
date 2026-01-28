@@ -63,4 +63,4 @@ export function recordActivityFromMessages(messages, { reset = false } = {}) {
     }
   });
 }
-export {getRavMonthRange}
+export { getRavMonthRange };
