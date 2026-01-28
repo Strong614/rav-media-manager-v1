@@ -74,29 +74,35 @@ client.once("ready", async () => {
     console.warn("❌ Could not set presence:", err);
   }
 
-  // ----------------------------
-  // Fetch historical posts
-  // ----------------------------
-  try {
-    const sourceChannel = await client.channels.fetch(process.env.SOURCE_CHANNEL_ID);
-    let messages = await sourceChannel.messages.fetch({ limit: 100 });
-    let lastId = messages.last()?.id;
+// ----------------------------
+// Fetch historical posts
+// ----------------------------
+try {
+  const sourceChannel = await client.channels.fetch(process.env.SOURCE_CHANNEL_ID);
+  let messages = await sourceChannel.messages.fetch({ limit: 100 });
+  let lastId = messages.last()?.id;
 
-    while (messages.size > 0 && lastId) {
-      const monthKey = getCurrentRavMonthKey();
+  while (messages.size > 0 && lastId) {
+    // Record each message into the correct Rav month
+    messages.forEach(msg => {
+      try {
+        const postData = parsePostData(msg);
+        recordPostsFromMessages([msg]); // Leaderboard stats
+        recordActivityPost(postData, getCurrentRavMonthKey(msg.createdAt)); // Correct month per message
+      } catch (err) {
+        console.warn(`[DEBUG] Failed to record historical message ${msg.id}:`, err);
+      }
+    });
 
-      recordPostsFromMessages(messages);
-      recordActivityFromMessages(messages, monthKey);
-
-      messages = await sourceChannel.messages.fetch({ limit: 100, before: lastId });
-      lastId = messages.last()?.id;
-    }
-
-
-    console.log("✅ Recorded all existing posts from source channel.");
-  } catch (err) {
-    console.error("❌ Error fetching historical messages:", err);
+    messages = await sourceChannel.messages.fetch({ limit: 100, before: lastId });
+    lastId = messages.last()?.id;
   }
+
+  console.log("✅ Recorded all existing posts from source channel.");
+} catch (err) {
+  console.error("❌ Error fetching historical messages:", err);
+}
+
 });
 
 // ----------------------------

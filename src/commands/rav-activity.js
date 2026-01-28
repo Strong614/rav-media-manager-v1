@@ -18,17 +18,20 @@ export const ravActivityCommand = {
       return interaction.reply({ content: "This command can only be used in the designated channels.", ephemeral: true });
     }
 
+    // Defer reply to allow time for generating image
     await interaction.deferReply();
 
     try {
-      let monthKey = interaction.options.getString("month") || getCurrentRavMonthKey();
-      const statsObj = activityStats[monthKey];
+      let monthKey = interaction.options.getString("month");
+      if (!monthKey) monthKey = getCurrentRavMonthKey();
 
-      if (!statsObj || !statsObj.all || Object.keys(statsObj.all).length === 0) {
+      const statsObj = activityStats[monthKey];
+      if (!statsObj || !statsObj.all) {
         return interaction.editReply({ content: `No activity data recorded yet for ${monthKey}.` });
       }
 
-      const stats = statsObj.all;
+      // Ensure all categories exist
+      const stats = { ...statsObj.all };
       const categories = ["misc", "event", "roleplay", "raid", "activity"];
       for (const cat of categories) if (!(cat in stats)) stats[cat] = 0;
 
