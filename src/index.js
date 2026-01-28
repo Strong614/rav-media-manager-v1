@@ -9,9 +9,15 @@ import { ravActivityCommand } from "./commands/rav-activity.js";
 
 import { REST, Routes, ActivityType } from "discord.js";
 import { recordPostsFromMessages } from "./analytics/analyticsStore.js";
-import { recordActivityFromMessages, recordActivityPost } from "./analytics/activityStats.js";
+import {
+  recordActivityFromMessages,
+  recordActivityPost,
+  getCurrentRavMonthKey
+} from "./analytics/activityStats.js";
+
 import { recordPost } from "./analytics/analyticsStore.js";
 import { parsePostData } from "./utils/postParser.js";
+
 
 // ----------------------------
 // Global error logging
@@ -77,12 +83,15 @@ client.once("ready", async () => {
     let lastId = messages.last()?.id;
 
     while (messages.size > 0 && lastId) {
+      const monthKey = getCurrentRavMonthKey();
+
       recordPostsFromMessages(messages);
-      recordActivityFromMessages(messages);
+      recordActivityFromMessages(messages, monthKey);
 
       messages = await sourceChannel.messages.fetch({ limit: 100, before: lastId });
       lastId = messages.last()?.id;
     }
+
 
     console.log("✅ Recorded all existing posts from source channel.");
   } catch (err) {
@@ -100,7 +109,8 @@ client.on("messageCreate", async (message) => {
   try {
     const postData = parsePostData(message);
     recordPost(postData);           // Leaderboard stats
-    recordActivityPost(postData);   // Activity stats
+    const monthKey = getCurrentRavMonthKey(message.createdAt);
+    recordActivityPost(postData, monthKey);   // Activity stats
   } catch (err) {
     console.warn(`[DEBUG] Failed to record message ${message.id}:`, err);
   }

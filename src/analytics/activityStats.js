@@ -7,6 +7,8 @@ export const activityStats = {};
 /* ───────── Rav Month Helpers ───────── */
 
 function getRavMonthRange(monthKey) {
+  if (!monthKey) throw new Error("monthKey is required");
+
   const [yearStr, monthStr] = monthKey.split("-");
   const year = parseInt(yearStr);
   const month = parseInt(monthStr);
@@ -19,19 +21,23 @@ function getRavMonthRange(monthKey) {
     startYear -= 1;
   }
 
-  const start = new Date(startYear, startMonth - 1, 27, 0, 0, 0);
+  const start = new Date(startYear, startMonth - 1, 27, 0, 0, 0, 0);
 
   // End = 26th of this month
-  const end = new Date(year, month - 1, 26, 23, 59, 59);
+  const end = new Date(year, month - 1, 26, 23, 59, 59, 999);
 
   return { start, end };
 }
 
 function isDateInRavMonth(date, monthKey) {
-  if (!(date instanceof Date)) return false;
+  if (!date) return false;
+  const d = new Date(date);
+  if (isNaN(d)) return false;
+
   const { start, end } = getRavMonthRange(monthKey);
-  return date >= start && date <= end;
+  return d >= start && d <= end;
 }
+
 
 /* ───────── Core Recording ───────── */
 
