@@ -1,9 +1,17 @@
 import { Low } from "lowdb";
 import { JSONFile } from "lowdb/node";
 import path from "path";
+import { existsSync, writeFileSync, mkdirSync } from "fs";
 
-const file = path.resolve("storage/mirroredPosts.json");
-const adapter = new JSONFile(file);
+// Ensure the storage folder exists
+const storageDir = path.resolve("storage");
+if (!existsSync(storageDir)) mkdirSync(storageDir, { recursive: true });
+
+// Ensure the file exists
+const filePath = path.join(storageDir, "mirroredPosts.json");
+if (!existsSync(filePath)) writeFileSync(filePath, "{}");
+
+const adapter = new JSONFile(filePath);
 export const mirroredDb = new Low(adapter, { posts: {} });
 
 export async function initMirroredDb() {
