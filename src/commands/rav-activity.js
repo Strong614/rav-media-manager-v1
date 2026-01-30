@@ -15,7 +15,7 @@ export const ravActivityCommand = {
   async execute(interaction) {
     const ALLOWED_CHANNELS = ["1361026129300815993", "1459687645629386836"];
     if (!ALLOWED_CHANNELS.includes(interaction.channelId)) {
-      return interaction.reply({ content: "This command can only be used in the designated channels.", ephemeral: true });
+      return interaction.reply({ content: "This command can only be used in the designated channels.", flags: MessageFlags.Ephemeral });
     }
 
     await interaction.deferReply();

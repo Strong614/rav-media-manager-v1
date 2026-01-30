@@ -129,7 +129,7 @@ export async function handleInteraction(interaction) {
   ) {
     return interaction.reply({
       content: "❌ You are not allowed to perform this action (only RAV media managers).",
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 
@@ -142,14 +142,14 @@ if (interaction.isButton()) {
     return interaction.update({
       content: "❎ Delete cancelled.",
       components: [],
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
 
   }
 
 // ───────── CONFIRM DELETE MIRRORED: YES ─────────
 if (interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_YES)) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   // ✅ Extract SOURCE post ID (not mod log ID)
   const [, sourceId] = interaction.customId.split(":");
@@ -187,7 +187,7 @@ const sourceMessage = botMessage.reference
 if (!sourceMessage) {
   return interaction.reply({
     content: "❌ Original post not found.",
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
 
   });
 }
@@ -261,7 +261,7 @@ if (interaction.customId === DELETE_BUTTON_ID) {
     return interaction.reply({
       content: "⚠️ Are you sure you want to delete the mirrored post? This cannot be undone.",
       components: [createConfirmDeleteMirroredRow(sourceMessage.id)],
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
 
     });
   }
@@ -302,7 +302,7 @@ if (interaction.customId === EDIT_BUTTON_ID) {
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
           content: "❌ An error occurred while executing this command.",
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
 
         });
       }
@@ -313,7 +313,7 @@ if (interaction.customId === EDIT_BUTTON_ID) {
   if (interaction.type === InteractionType.ModalSubmit) {
     // DELETE modal (existing logic)
     if (interaction.customId.startsWith("delete_modal_")) {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const messageId = interaction.customId.replace("delete_modal_", "");
       const note = interaction.fields.getTextInputValue("delete_note");
       const channel = interaction.channel;
@@ -354,7 +354,7 @@ if (interaction.customId === EDIT_BUTTON_ID) {
 
 // ───────── EDIT MIRRORED MODAL SUBMISSION ─────────
 if (interaction.customId.startsWith("edit_mirrored_")) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
 
   const sourceMessageId = interaction.customId.replace("edit_mirrored_", "");
