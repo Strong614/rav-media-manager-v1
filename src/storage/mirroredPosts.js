@@ -10,8 +10,21 @@ const file = path.resolve("src/storage/mirroredPosts.json");
 const folder = path.dirname(file);
 if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
 
-// Ensure file exists
-if (!fs.existsSync(file)) fs.writeFileSync(file, JSON.stringify({ posts: {} }));
+// Ensure file exists and is valid JSON
+function ensureValidJSON() {
+  if (!fs.existsSync(file)) {
+    fs.writeFileSync(file, JSON.stringify({ posts: {} }));
+  } else {
+    try {
+      const content = fs.readFileSync(file, "utf-8").trim();
+      JSON.parse(content); // test if valid
+    } catch {
+      // If corrupted, overwrite with empty structure
+      fs.writeFileSync(file, JSON.stringify({ posts: {} }));
+    }
+  }
+}
+ensureValidJSON();
 
 // Adapter
 const adapter = new JSONFile(file);
