@@ -14,11 +14,15 @@ import {
   APPROVE_BUTTON_ID,
   REJECT_BUTTON_ID,
   DELETE_BUTTON_ID,
-  EDIT_BUTTON_ID, // NEW
-  DELETE_MIRRORED_BUTTON_ID, // NEW
+  EDIT_BUTTON_ID,
+  DELETE_MIRRORED_BUTTON_ID,
+  CONFIRM_DELETE_MIRRORED_YES,
+  CONFIRM_DELETE_MIRRORED_NO,
   createDeleteRow,
-  createModMirroredRow // NEW
+  createModMirroredRow,
+  createConfirmDeleteMirroredRow
 } from "../ui/actionRow.js";
+
 
 import { EmbedBuilder } from "discord.js";
 import { generatePostComponents } from "../formatting/postComponents.js";
@@ -28,6 +32,8 @@ import { ravLeaderboardCommand } from "../commands/ravLeaderboard.js";
 import { ravActivityCommand } from "../commands/rav-activity.js";
 import { enforcePostFormat } from "../utils/postFormatValidator.js"; 
 import { TEMPLATE, EXAMPLES, detectPostType } from "../utils/postFormatValidator.js";
+
+import { setMirroredPost, getMirroredPost, deleteMirroredPost } from "../storage/mirroredPosts.js";
 
 const MEDIA_MANAGER_ROLE = "Media Manager";
 
@@ -127,157 +133,164 @@ export async function handleInteraction(interaction) {
     });
   }
 
-  // ───────── BUTTON INTERACTIONS ─────────
-  if (interaction.isButton()) {
-    const botMessage = interaction.message;
+// ───────── BUTTON INTERACTIONS ─────────
+if (interaction.isButton()) {
+  const botMessage = interaction.message;
 
-    const sourceMessage = botMessage.reference
-      ? await interaction.channel.messages
-          .fetch(botMessage.reference.messageId)
-          .catch(() => null)
-      : null;
+  // ───────── CONFIRM DELETE MIRRORED: CANCEL ─────────
+  if (interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_NO)) {
+    return interaction.update({
+      content: "❎ Delete cancelled.",
+      components: []
+    });
+  }
 
-    if (!sourceMessage) {
-      return interaction.reply({
-        content: "❌ Original post not found.",
-        flags: 64
-      });
-    }
+  // ───────── CONFIRM DELETE MIRRORED: YES ─────────
+  if (interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_YES)) {
+    await interaction.deferReply({ ephemeral: true });
 
-    /* ───────── APPROVE ───────── */
-    if (interaction.customId === APPROVE_BUTTON_ID) {
-      await interaction.deferUpdate();
+    const [, botMessageId] = interaction.customId.split(":");
+    const modLogMessage = await interaction.channel.messages
+      .fetch(botMessageId)
+      .catch(() => null);
 
-      if (botMessage.components.length) {
-        await botMessage.edit({
-          components: disableButtons(botMessage)
-        });
-      }
+    if (!modLogMessage) return interaction.editReply("❌ Source message not found.");
 
-      const postData = parsePostData(sourceMessage);
-      recordPost(sourceMessage.author.id, postData);
+    const mapping = await getMirroredPost(modLogMessage.id);
+      if (!mapping) return interaction.editReply("❌ No mirrored post found");
+      const targetId = mapping.mirroredId;
 
-      const { components, flags } = generatePostComponents(postData);
-
+    try {
       const targetChannel = await client.channels.fetch(process.env.TARGET_CHANNEL_ID);
+      const targetMsg = await targetChannel.messages.fetch(targetId);
 
-      // Send post to target channel
-      const publishedMessage = await targetChannel.send({ components, flags });
+      await targetMsg.delete();
 
       const timestamp = Math.floor(Date.now() / 1000);
-      const typeLabel =
-        postData.type === "rp"
-          ? "Roleplay"
-          : postData.type === "event"
-          ? "Event"
-          : "Activity";
-      const postNumber = postData.postNumber ?? "N/A";
+      const typeLabel = modLogMessage._mirroredData?.type === "rp"
+        ? "Roleplay"
+        : modLogMessage._mirroredData?.type === "event"
+        ? "Event"
+        : "Activity";
+      const postNumber = modLogMessage._mirroredData?.postNumber ?? "N/A";
 
-      // NEW: add mod-only buttons for mirrored post management
-      await botMessage.edit({
-        content: `_Log — Post Type: ${typeLabel} | Post Number: ${postNumber} | Approved by ${interaction.user} at <t:${timestamp}:f> | [View Post](${publishedMessage.url})_`,
-        components: [createModMirroredRow()]
+      await modLogMessage.edit({
+        content: `_Log — Post Type: ${typeLabel} | Post Number: ${postNumber} | Deleted by ${interaction.user} at <t:${timestamp}:f>_`,
+        components: []
       });
 
-      // NEW: store mapping source -> target message ID somewhere (in-memory or DB)
-      botMessage._mirroredId = publishedMessage.id;
-      botMessage._mirroredData = postData;
-
-      return;
+      return interaction.editReply("🗑️ Mirrored post deleted successfully.");
+    } catch (err) {
+      console.error(err);
+      return interaction.editReply("❌ Failed to delete mirrored post.");
     }
+  }
 
-    /* ───────── REJECT ───────── */
-    if (interaction.customId === REJECT_BUTTON_ID) {
-      await interaction.update({
-        content: "❌ Post rejected. Media Manager can delete it.",
-        components: [createDeleteRow()]
-      });
-      return;
-    }
-
-    /* ───────── DELETE (SHOW MODAL) ───────── */
-    if (interaction.customId === DELETE_BUTTON_ID) {
-      const modal = new ModalBuilder()
-        .setCustomId(`delete_modal_${sourceMessage.id}`)
-        .setTitle("Delete Post");
-
-      const noteInput = new TextInputBuilder()
-        .setCustomId("delete_note")
-        .setLabel("Reason for deletion (optional)")
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(false);
-
-      modal.addComponents(new ActionRowBuilder().addComponents(noteInput));
-
-      return interaction.showModal(modal);
-    }
-
-    // ───────── NEW: Delete Mirrored ─────────
-    if (interaction.customId === DELETE_MIRRORED_BUTTON_ID) {
-      await interaction.deferReply({ ephemeral: true });
-
-      const targetId = botMessage._mirroredId; // get linked mirrored message
-      if (!targetId) return interaction.editReply("❌ No mirrored post found.");
-
-      try {
-        const targetChannel = await client.channels.fetch(process.env.TARGET_CHANNEL_ID);
-        const targetMsg = await targetChannel.messages.fetch(targetId);
-        
-        await targetMsg.delete();
-
-        const timestamp = Math.floor(Date.now() / 1000);
-        const typeLabel = botMessage._mirroredData?.type === "rp"
-          ? "Roleplay"
-          : botMessage._mirroredData?.type === "event"
-          ? "Event"
-          : "Activity";
-        const postNumber = botMessage._mirroredData?.postNumber ?? "N/A";
-
-        await botMessage.edit({
-          content: `_Log — Post Type: ${typeLabel} | Post Number: ${postNumber} | Deleted by ${interaction.user} at <t:${timestamp}:f>_`,
-          components: [],
-        });
-
-        interaction.editReply("🗑️ Mirrored post deleted successfully.");
-
-
-
-      } catch (err) {
-        console.error(err);
-        interaction.editReply("❌ Failed to delete mirrored post.");
-      }
-
-      return;
-    }
-
-    // ───────── NEW: Edit Mirrored ─────────
-    if (interaction.customId === EDIT_BUTTON_ID) {
-  const sourceMessage = interaction.message;
-  const sourceContent = sourceMessage.reference
+  // ───────── FETCH SOURCE MESSAGE (ONLY FOR NORMAL BUTTONS) ─────────
+  const sourceMessage = botMessage.reference
     ? await interaction.channel.messages
-        .fetch(sourceMessage.reference.messageId)
-        .then(msg => msg.content)
-        .catch(() => "")
-    : "";
+        .fetch(botMessage.reference.messageId)
+        .catch(() => null)
+    : null;
 
-  const modal = new ModalBuilder()
-    .setCustomId(`edit_mirrored_${sourceMessage.id}`)
-    .setTitle("Edit Mirrored Post");
+  if (!sourceMessage) {
+    return interaction.reply({
+      content: "❌ Original post not found.",
+      flags: 64
+    });
+  }
 
-  const textInput = new TextInputBuilder()
-    .setCustomId("edit_text")
-    .setLabel("Edit the post content")
-    .setStyle(TextInputStyle.Paragraph)
-    .setRequired(true)
-    .setValue(sourceContent); // prefill with the original post
+  /* ───────── APPROVE ───────── */
+  if (interaction.customId === APPROVE_BUTTON_ID) {
+    await interaction.deferUpdate();
 
-  modal.addComponents(new ActionRowBuilder().addComponents(textInput));
+    if (botMessage.components.length) {
+      await botMessage.edit({
+        components: disableButtons(botMessage)
+      });
+    }
 
-  return interaction.showModal(modal);
+    const postData = parsePostData(sourceMessage);
+    recordPost(sourceMessage.author.id, postData);
+
+    const { components, flags } = generatePostComponents(postData);
+    const targetChannel = await client.channels.fetch(process.env.TARGET_CHANNEL_ID);
+    const publishedMessage = await targetChannel.send({ components, flags });
+
+    const timestamp = Math.floor(Date.now() / 1000);
+    const typeLabel =
+      postData.type === "rp"
+        ? "Roleplay"
+        : postData.type === "event"
+        ? "Event"
+        : "Activity";
+    const postNumber = postData.postNumber ?? "N/A";
+
+    await botMessage.edit({
+      content: `_Log — Post Type: ${typeLabel} | Post Number: ${postNumber} | Approved by ${interaction.user} at <t:${timestamp}:f> | [View Post](${publishedMessage.url})_`,
+      components: [createModMirroredRow()]
+    });
+
+    await setMirroredPost(sourceMessage.id, publishedMessage.id, postData);
+
+
+    return;
+  }
+
+  /* ───────── REJECT ───────── */
+  if (interaction.customId === REJECT_BUTTON_ID) {
+    await interaction.update({
+      content: "❌ Post rejected. Media Manager can delete it.",
+      components: [createDeleteRow()]
+    });
+    return;
+  }
+
+  /* ───────── DELETE (SHOW MODAL) ───────── */
+  if (interaction.customId === DELETE_BUTTON_ID) {
+    const modal = new ModalBuilder()
+      .setCustomId(`delete_modal_${sourceMessage.id}`)
+      .setTitle("Delete Post");
+
+    const noteInput = new TextInputBuilder()
+      .setCustomId("delete_note")
+      .setLabel("Reason for deletion (optional)")
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(false);
+
+    modal.addComponents(new ActionRowBuilder().addComponents(noteInput));
+    return interaction.showModal(modal);
+  }
+
+  // ───────── Delete Mirrored (CONFIRM PROMPT) ─────────
+  if (interaction.customId === DELETE_MIRRORED_BUTTON_ID) {
+    return interaction.reply({
+      content: "⚠️ Are you sure you want to delete the mirrored post? This cannot be undone.",
+      components: [createConfirmDeleteMirroredRow(botMessage.id)],
+      flags: 64
+    });
+  }
+
+  // ───────── Edit Mirrored ─────────
+  if (interaction.customId === EDIT_BUTTON_ID) {
+    const sourceContent = sourceMessage.content;
+
+    const modal = new ModalBuilder()
+      .setCustomId(`edit_mirrored_${botMessage.id}`)
+      .setTitle("Edit Mirrored Post");
+
+    const textInput = new TextInputBuilder()
+      .setCustomId("edit_text")
+      .setLabel("Edit the post content")
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true)
+      .setValue(sourceContent);
+
+    modal.addComponents(new ActionRowBuilder().addComponents(textInput));
+    return interaction.showModal(modal);
+  }
 }
 
-
-  }
 
   // ───────── SLASH COMMANDS (unchanged) ─────────
   if (interaction.isChatInputCommand()) {
@@ -350,28 +363,32 @@ if (interaction.customId.startsWith("edit_mirrored_")) {
   await interaction.deferReply({ flags: 64 });
 
   const sourceMessageId = interaction.customId.replace("edit_mirrored_", "");
+  
+  // Fetch bot/mod log message
   const botMessage = await interaction.channel.messages
     .fetch(sourceMessageId)
     .catch(() => null);
   if (!botMessage) return interaction.editReply("❌ Source message not found.");
 
-  const originalPostData = botMessage._mirroredData;
-  if (!originalPostData) return interaction.editReply("❌ Original post data missing.");
+  // Fetch mirrored mapping first
+  const mapping = await getMirroredPost(sourceMessageId);
+  if (!mapping) return interaction.editReply("❌ Original mirrored post not found.");
+
+  const originalPostData = mapping.postData;
+  const targetId = mapping.mirroredId;
 
   try {
-    // Collect new values from modal (text input for simplicity)
+    // Get new content from modal
     const newContent = interaction.fields.getTextInputValue("edit_text");
 
-    // Parse new content into fields (like parsePostData)
-    const lines = newContent.split("\n").map(l => l.trim());
+    // Create a fresh copy of original post data
     const updatedPostData = { ...originalPostData };
 
+    // Parse new content line by line
+    const lines = newContent.split("\n").map(l => l.trim());
     for (const line of lines) {
       if (line.startsWith("Post Number:")) updatedPostData.postNumber = line.replace("Post Number:", "").trim();
-      else if (line.startsWith("Activity type:") || line.startsWith("Type:")) {
-        // ✅ Always store in activityType
-        updatedPostData.activityType = line.split(":")[1].trim();
-      }
+      else if (line.startsWith("Activity type:") || line.startsWith("Type:")) updatedPostData.activityType = line.split(":")[1].trim();
       else if (line.startsWith("Date:")) updatedPostData.date = line.replace("Date:", "").trim();
       else if (line.startsWith("Participants:")) updatedPostData.participants = line.replace("Participants:", "").trim();
       else if (line.startsWith("Winner:")) updatedPostData.winner = line.replace("Winner:", "").trim();
@@ -387,7 +404,7 @@ if (interaction.customId.startsWith("edit_mirrored_")) {
       updatedPostData.participants = updatedPostData.roleplayParticipants || "";
     }
 
-    // Split participants robustly
+    // Split participants into array
     if (updatedPostData.participants) {
       let normalized = updatedPostData.participants
         .replace(/\s+(and)\s+/gi, ",")
@@ -402,24 +419,22 @@ if (interaction.customId.startsWith("edit_mirrored_")) {
         .filter(p => p);
     }
 
-    // Rebuild message completely
-    // ✅ generatePostComponents will now always display "Type: <activityType>" instead of "Activity type:"
+    // Rebuild mirrored message components
     const { components, flags } = generatePostComponents(updatedPostData);
 
-    const targetId = botMessage._mirroredId;
-    if (!targetId) return interaction.editReply("❌ Mirrored post not found.");
-
+    // Fetch target channel and message
     const targetChannel = await client.channels.fetch(process.env.TARGET_CHANNEL_ID);
     const targetMsg = await targetChannel.messages.fetch(targetId);
 
-    // ✅ Replace old components with fresh ones
+    // Edit the mirrored message
     await targetMsg.edit({
       content: null,
       components,
       flags,
     });
 
-        const timestamp = Math.floor(Date.now() / 1000);
+    // Update the mod log message
+    const timestamp = Math.floor(Date.now() / 1000);
     const typeLabel = updatedPostData.type === "rp"
       ? "Roleplay"
       : updatedPostData.type === "event"
@@ -432,8 +447,8 @@ if (interaction.customId.startsWith("edit_mirrored_")) {
       components: [createModMirroredRow()],
     });
 
-
     // Save updated data for future edits
+    await setMirroredPost(sourceMessageId, targetId, updatedPostData);
     botMessage._mirroredData = updatedPostData;
 
     return interaction.editReply("✏️ Mirrored post edited successfully.");

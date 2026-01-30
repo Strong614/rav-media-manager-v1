@@ -18,6 +18,8 @@ import {
 import { recordPost } from "./analytics/analyticsStore.js";
 import { parsePostData } from "./utils/postParser.js";
 
+import { initMirroredDb } from "./storage/mirroredPosts.js";
+
 // ----------------------------
 // Global error logging
 // ----------------------------
@@ -33,6 +35,11 @@ console.log("DEBUG ENV CHECK:", {
   hasGuildId: !!process.env.RAV_GUILD_ID,
   hasSourceChannel: !!process.env.SOURCE_CHANNEL_ID
 });
+
+(async () => {
+  await initMirroredDb();
+  console.log("✅ Mirrored posts DB initialized");
+})();
 
 // ----------------------------
 // Register slash commands
