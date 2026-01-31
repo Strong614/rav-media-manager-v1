@@ -13,14 +13,15 @@ if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
 // Ensure file exists and is valid JSON
 function ensureValidJSON() {
   if (!fs.existsSync(file)) {
-    fs.writeFileSync(file, JSON.stringify({ posts: {} }));
+    fs.writeFileSync(file, JSON.stringify({ posts: {} }, null, 2));
+    console.log("[DB INIT] Created new mirroredPosts.json");
   } else {
     try {
       const content = fs.readFileSync(file, "utf-8").trim();
       JSON.parse(content); // test if valid
     } catch {
-      // If corrupted, overwrite with empty structure
-      fs.writeFileSync(file, JSON.stringify({ posts: {} }));
+      fs.writeFileSync(file, JSON.stringify({ posts: {} }, null, 2));
+      console.log("[DB INIT] Recreated mirroredPosts.json (was corrupted)");
     }
   }
 }
@@ -33,6 +34,14 @@ const adapter = new JSONFile(file);
 export const mirroredDb = new Low(adapter, { posts: {} });
 
 /**
+ * Print current DB state for debugging
+ */
+function logDbState(action) {
+  console.log(`[DB ${action}] Current mirroredPosts.json:`);
+  console.log(JSON.stringify(mirroredDb.data, null, 2));
+}
+
+/**
  * Initialize mirrored DB safely
  */
 export async function initMirroredDb() {
@@ -40,6 +49,8 @@ export async function initMirroredDb() {
   mirroredDb.data ||= { posts: {} };
   mirroredDb.data.posts ||= {};
   await mirroredDb.write();
+  console.log("[DB INIT] mirroredDb initialized");
+  logDbState("INIT");
 }
 
 /**
@@ -51,6 +62,8 @@ export async function setMirroredPost(sourceId, mirroredId, postData = null) {
   mirroredDb.data.posts ||= {};
   mirroredDb.data.posts[sourceId] = { mirroredId, postData };
   await mirroredDb.write();
+  console.log(`[DB SET] sourceId=${sourceId} -> mirroredId=${mirroredId}`);
+  logDbState("SET");
 }
 
 /**
@@ -60,7 +73,9 @@ export async function getMirroredPost(sourceId) {
   await mirroredDb.read();
   mirroredDb.data ||= { posts: {} };
   mirroredDb.data.posts ||= {};
-  return mirroredDb.data.posts[sourceId] || null;
+  const result = mirroredDb.data.posts[sourceId] || null;
+  console.log(`[DB GET] sourceId=${sourceId} -> ${result ? "found" : "not found"}`);
+  return result;
 }
 
 /**
@@ -73,6 +88,10 @@ export async function updateMirroredPostData(sourceId, newPostData) {
   if (mirroredDb.data.posts[sourceId]) {
     mirroredDb.data.posts[sourceId].postData = newPostData;
     await mirroredDb.write();
+    console.log(`[DB UPDATE] sourceId=${sourceId} postData updated`);
+    logDbState("UPDATE");
+  } else {
+    console.log(`[DB UPDATE] sourceId=${sourceId} not found`);
   }
 }
 
@@ -83,6 +102,12 @@ export async function deleteMirroredPost(sourceId) {
   await mirroredDb.read();
   mirroredDb.data ||= { posts: {} };
   mirroredDb.data.posts ||= {};
-  delete mirroredDb.data.posts[sourceId];
-  await mirroredDb.write();
+  if (mirroredDb.data.posts[sourceId]) {
+    delete mirroredDb.data.posts[sourceId];
+    await mirroredDb.write();
+    console.log(`[DB DELETE] sourceId=${sourceId} deleted`);
+    logDbState("DELETE");
+  } else {
+    console.log(`[DB DELETE] sourceId=${sourceId} not found`);
+  }
 }
