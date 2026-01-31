@@ -135,6 +135,15 @@ export async function handleInteraction(interaction) {
 // ───────── BUTTON INTERACTIONS ─────────
 if (interaction.isButton()) {
 
+  // ACK confirm delete buttons (ephemeral replies)
+if (
+  interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_YES) ||
+  interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_NO)
+) {
+  await interaction.deferReply({ ephemeral: true });
+}
+
+
   // 🔥 ACK IMMEDIATELY (this is the fix)
   if (
     interaction.customId === APPROVE_BUTTON_ID ||
@@ -144,48 +153,32 @@ if (interaction.isButton()) {
     await interaction.deferUpdate();
   }
 
-  if (
-    interaction.customId === EDIT_BUTTON_ID ||
-    interaction.customId === DELETE_MIRRORED_BUTTON_ID ||
-    interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_YES) ||
-    interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_NO)
-  ) {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  }
-
   const botMessage = interaction.message;
 
 
   // ───────── CONFIRM DELETE MIRRORED: CANCEL ─────────
   if (interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_NO)) {
-    await interaction.deferReply({ ephemeral: true }); // ✅ add this
     return interaction.editReply({
       content: "❎ Delete cancelled.",
       components: []
     });
-    
   }
+
 
 // ───────── CONFIRM DELETE MIRRORED: YES ─────────
 if (interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_YES)) {
-await interaction.deferReply({ ephemeral: true }); // ✅ add this
-  // ✅ Extract SOURCE post ID (not mod log ID)
-  const [, sourceId] = interaction.customId.split(":");
+  const sourceId = interaction.customId.split(":")[1];
 
-  // ✅ Fetch mirrored mapping using SOURCE ID
   const mapping = await getMirroredPost(sourceId);
-  if (!mapping) return interaction.editReply("❌ No mirrored post found");
-
-  const targetId = mapping.mirroredId;
+  if (!mapping) {
+    return interaction.editReply("❌ No mirrored post found.");
+  }
 
   try {
     const targetChannel = await client.channels.fetch(process.env.TARGET_CHANNEL_ID);
-    const targetMsg = await targetChannel.messages.fetch(targetId);
+    const targetMsg = await targetChannel.messages.fetch(mapping.mirroredId);
 
-    // ✅ Delete mirrored Discord message
     await targetMsg.delete();
-
-    // ✅ Delete from LowDB to prevent stale mappings
     await deleteMirroredPost(sourceId);
 
     return interaction.editReply("🗑️ Mirrored post deleted successfully.");
@@ -194,6 +187,7 @@ await interaction.deferReply({ ephemeral: true }); // ✅ add this
     return interaction.editReply("❌ Failed to delete mirrored post.");
   }
 }
+
 
 // ───────── FETCH SOURCE MESSAGE (ONLY FOR NORMAL BUTTONS) ─────────
 const sourceMessage = botMessage.reference
@@ -273,10 +267,10 @@ if (interaction.customId === DELETE_BUTTON_ID) {
 }
 
   // ───────── Delete Mirrored (CONFIRM PROMPT) ─────────
-if (interaction.customId === DELETE_MIRRORED_BUTTON_ID) {
-  await interaction.deferReply({ ephemeral: true }); // ✅ defer first
+if (interaction.customId.startsWith(DELETE_MIRRORED_BUTTON_ID)) {
+  await interaction.deferReply({ ephemeral: true }); // ✅ correct here
 
-  const sourceId = botMessage.reference?.messageId || botMessage.id; // fallback for old posts
+  const sourceId = interaction.customId.split(":")[1];
 
   return interaction.editReply({
     content: "⚠️ Are you sure you want to delete the mirrored post? This cannot be undone.",
@@ -286,13 +280,21 @@ if (interaction.customId === DELETE_MIRRORED_BUTTON_ID) {
 
 
 
-/* ───────── EDIT MIRRORED ───────── */
-if (interaction.customId === EDIT_BUTTON_ID) {
-  await interaction.deferReply({ ephemeral: true }); // ✅ defer first
 
-  const sourceId = botMessage.reference?.messageId || botMessage.id; // fallback for old posts
-  const sourceMessage = await interaction.channel.messages.fetch(sourceId).catch(() => null);
-  if (!sourceMessage) return interaction.editReply("❌ Source message not found.");
+/* ───────── EDIT MIRRORED ───────── */
+if (interaction.customId.startsWith(EDIT_BUTTON_ID)) {
+  const sourceId = interaction.customId.split(":")[1];
+
+  const sourceMessage = await interaction.channel.messages
+    .fetch(sourceId)
+    .catch(() => null);
+
+  if (!sourceMessage) {
+    return interaction.reply({
+      content: "❌ Source message not found.",
+      flags: MessageFlags.Ephemeral
+    });
+  }
 
   const modal = new ModalBuilder()
     .setCustomId(`edit_mirrored_${sourceId}`)
@@ -307,8 +309,9 @@ if (interaction.customId === EDIT_BUTTON_ID) {
 
   modal.addComponents(new ActionRowBuilder().addComponents(textInput));
 
-  return interaction.showModal(modal); // ✅ must return immediately
+  return interaction.showModal(modal); // ✅ NO DEFER BEFORE THIS
 }
+
 
 }
 
