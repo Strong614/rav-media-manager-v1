@@ -175,16 +175,27 @@ if (interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_YES)) {
   }
 
   try {
+    // ───── Delete mirrored post (target channel) ─────
     const targetChannel = await client.channels.fetch(process.env.TARGET_CHANNEL_ID);
     const targetMsg = await targetChannel.messages.fetch(mapping.mirroredId);
+    await targetMsg.delete().catch(() => {});
 
-    await targetMsg.delete();
+    // ───── Delete source post (source channel) ─────
+    const sourceMsg = await interaction.channel.messages
+      .fetch(sourceId)
+      .catch(() => null);
+
+    if (sourceMsg) {
+      await sourceMsg.delete().catch(() => {});
+    }
+
+    // ───── Clean DB ─────
     await deleteMirroredPost(sourceId);
 
-    return interaction.editReply("🗑️ Mirrored post deleted successfully.");
+    return interaction.editReply("🗑️ Source and mirrored posts deleted successfully.");
   } catch (err) {
     console.error(err);
-    return interaction.editReply("❌ Failed to delete mirrored post.");
+    return interaction.editReply("❌ Failed to delete posts.");
   }
 }
 
