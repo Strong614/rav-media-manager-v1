@@ -124,32 +124,50 @@ export async function handleInteraction(interaction) {
 
   // Permission check (existing)
   if (
-    interaction.isButton() &&
-    !interaction.member.roles.cache.some(r => r.name === MEDIA_MANAGER_ROLE)
-  ) {
-    return interaction.reply({
-      content: "❌ You are not allowed to perform this action (only RAV media managers).",
-      flags: MessageFlags.Ephemeral
-    });
-  }
+  interaction.isButton() &&
+  !interaction.member.roles.cache.some(r => r.name === MEDIA_MANAGER_ROLE)
+) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  return interaction.editReply("❌ You are not allowed to perform this action (only RAV media managers).");
+}
+
 
 // ───────── BUTTON INTERACTIONS ─────────
 if (interaction.isButton()) {
+
+  // 🔥 ACK IMMEDIATELY (this is the fix)
+  if (
+    interaction.customId === APPROVE_BUTTON_ID ||
+    interaction.customId === REJECT_BUTTON_ID ||
+    interaction.customId === DELETE_BUTTON_ID
+  ) {
+    await interaction.deferUpdate();
+  }
+
+  if (
+    interaction.customId === EDIT_BUTTON_ID ||
+    interaction.customId === DELETE_MIRRORED_BUTTON_ID ||
+    interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_YES) ||
+    interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_NO)
+  ) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  }
+
   const botMessage = interaction.message;
+
 
   // ───────── CONFIRM DELETE MIRRORED: CANCEL ─────────
   if (interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_NO)) {
-    return interaction.update({
+    return interaction.editReply({
       content: "❎ Delete cancelled.",
-      components: [],
-      flags: MessageFlags.Ephemeral
+      components: []
     });
+
 
   }
 
 // ───────── CONFIRM DELETE MIRRORED: YES ─────────
 if (interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_YES)) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   // ✅ Extract SOURCE post ID (not mod log ID)
   const [, sourceId] = interaction.customId.split(":");
@@ -185,16 +203,15 @@ const sourceMessage = botMessage.reference
   : null;
 
 if (!sourceMessage) {
-  return interaction.reply({
+  return interaction.editReply({
     content: "❌ Original post not found.",
-    flags: MessageFlags.Ephemeral
-
+    components: []
   });
 }
 
+
 /* ───────── APPROVE ───────── */
 if (interaction.customId === APPROVE_BUTTON_ID) {
-  await interaction.deferUpdate();
 
   if (botMessage.components.length) {
     await botMessage.edit({
@@ -232,13 +249,12 @@ if (interaction.customId === APPROVE_BUTTON_ID) {
 
 /* ───────── REJECT ───────── */
 if (interaction.customId === REJECT_BUTTON_ID) {
-  await interaction.update({
+  await botMessage.edit({
     content: "❌ Post rejected. Media Manager can delete it.",
     components: [createDeleteRow()]
   });
   return;
 }
-
 
 /* ───────── DELETE (SHOW MODAL) ───────── */
 if (interaction.customId === DELETE_BUTTON_ID) {
@@ -258,12 +274,11 @@ if (interaction.customId === DELETE_BUTTON_ID) {
 
   // ───────── Delete Mirrored (CONFIRM PROMPT) ─────────
   if (interaction.customId === DELETE_MIRRORED_BUTTON_ID) {
-    return interaction.reply({
+    return interaction.editReply({
       content: "⚠️ Are you sure you want to delete the mirrored post? This cannot be undone.",
-      components: [createConfirmDeleteMirroredRow(sourceMessage.id)],
-      flags: MessageFlags.Ephemeral
-
+      components: [createConfirmDeleteMirroredRow(sourceMessage.id)]
     });
+
   }
 
 /* ───────── EDIT MIRRORED ───────── */
