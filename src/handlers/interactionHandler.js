@@ -158,17 +158,17 @@ if (interaction.isButton()) {
 
   // ───────── CONFIRM DELETE MIRRORED: CANCEL ─────────
   if (interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_NO)) {
+    await interaction.deferReply({ ephemeral: true }); // ✅ add this
     return interaction.editReply({
       content: "❎ Delete cancelled.",
       components: []
     });
-
-
+    
   }
 
 // ───────── CONFIRM DELETE MIRRORED: YES ─────────
 if (interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_YES)) {
-
+await interaction.deferReply({ ephemeral: true }); // ✅ add this
   // ✅ Extract SOURCE post ID (not mod log ID)
   const [, sourceId] = interaction.customId.split(":");
 
@@ -273,18 +273,29 @@ if (interaction.customId === DELETE_BUTTON_ID) {
 }
 
   // ───────── Delete Mirrored (CONFIRM PROMPT) ─────────
-  if (interaction.customId === DELETE_MIRRORED_BUTTON_ID) {
-    return interaction.editReply({
-      content: "⚠️ Are you sure you want to delete the mirrored post? This cannot be undone.",
-      components: [createConfirmDeleteMirroredRow(sourceMessage.id)]
-    });
+if (interaction.customId === DELETE_MIRRORED_BUTTON_ID) {
+  await interaction.deferReply({ ephemeral: true }); // ✅ defer first
 
-  }
+  const sourceId = botMessage.reference?.messageId || botMessage.id; // fallback for old posts
+
+  return interaction.editReply({
+    content: "⚠️ Are you sure you want to delete the mirrored post? This cannot be undone.",
+    components: [createConfirmDeleteMirroredRow(sourceId)]
+  });
+}
+
+
 
 /* ───────── EDIT MIRRORED ───────── */
 if (interaction.customId === EDIT_BUTTON_ID) {
+  await interaction.deferReply({ ephemeral: true }); // ✅ defer first
+
+  const sourceId = botMessage.reference?.messageId || botMessage.id; // fallback for old posts
+  const sourceMessage = await interaction.channel.messages.fetch(sourceId).catch(() => null);
+  if (!sourceMessage) return interaction.editReply("❌ Source message not found.");
+
   const modal = new ModalBuilder()
-    .setCustomId(`edit_mirrored_${sourceMessage.id}`)
+    .setCustomId(`edit_mirrored_${sourceId}`)
     .setTitle("Edit Mirrored Post");
 
   const textInput = new TextInputBuilder()
@@ -295,8 +306,10 @@ if (interaction.customId === EDIT_BUTTON_ID) {
     .setValue(sourceMessage.content);
 
   modal.addComponents(new ActionRowBuilder().addComponents(textInput));
-  return interaction.showModal(modal);
+
+  return interaction.showModal(modal); // ✅ must return immediately
 }
+
 }
 
 
