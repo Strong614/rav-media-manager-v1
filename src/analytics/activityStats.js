@@ -46,23 +46,42 @@ export function recordActivityPost(postData, monthKey) {
   }
 
   // Update total
-  monthStats.all.activity = Object.values(monthStats.all).reduce((sum, val) => sum + val, 0);
+  monthStats.all.activity =
+  ["misc", "event", "roleplay", "raid"].reduce(
+    (sum, k) => sum + monthStats.all[k],
+    0
+  );
+
 }
 
 /* ───────── Bulk Recording ───────── */
 export function recordActivityFromMessages(messages, { reset = false } = {}) {
+  const initializedMonths = new Set();
+
   messages.forEach(msg => {
     try {
       const postData = parsePostData(msg);
-      const monthKey = getCurrentRavMonthKey(msg.createdAt); // always per-message date
+      const monthKey = getCurrentRavMonthKey(msg.createdAt);
 
-      if (reset || !activityStats[monthKey]) activityStats[monthKey] = { all: {}, users: {} };
+      if (
+        reset &&
+        !initializedMonths.has(monthKey)
+      ) {
+        activityStats[monthKey] = { all: {}, users: {} };
+        initializedMonths.add(monthKey);
+      }
+
+      if (!activityStats[monthKey]) {
+        activityStats[monthKey] = { all: {}, users: {} };
+      }
+
       recordActivityPost(postData, monthKey);
     } catch (err) {
       console.warn(`[DEBUG] Failed to record message ${msg.id}:`, err);
     }
   });
 }
+
 
 /* ───────── Rav Month Range ───────── */
 export function getRavMonthRange(monthKey) {
