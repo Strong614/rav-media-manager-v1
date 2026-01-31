@@ -395,30 +395,26 @@ if (interaction.customId.startsWith(EDIT_BUTTON_ID)) {
 
 
 // ───────── EDIT MIRRORED MODAL SUBMISSION ─────────
+
+
 if (interaction.customId.startsWith("edit_mirrored_")) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-
   const sourceMessageId = interaction.customId.replace("edit_mirrored_", "");
-  
-  // Fetch bot/mod log message
-  const botMessage = await interaction.channel.messages
-    .fetch(sourceMessageId)
-    .catch(() => null);
-  if (!botMessage) return interaction.editReply("❌ Source message not found.");
 
-  // Fetch mirrored mapping first
-  const mapping = await getMirroredPost(sourceMessageId); // ✅ now correct
+  // Fetch mirrored mapping
+  const mapping = await getMirroredPost(sourceMessageId);
   if (!mapping) return interaction.editReply("❌ Original mirrored post not found.");
 
   const originalPostData = mapping.postData;
   const targetId = mapping.mirroredId;
+  const logMessageId = mapping.logMessageId; // NEW: store log message ID when approving
 
   try {
     // Get new content from modal
     const newContent = interaction.fields.getTextInputValue("edit_text");
 
-    // Create a fresh copy of original post data
+    // Copy original post data
     const updatedPostData = { ...originalPostData };
 
     // Parse new content line by line
@@ -436,14 +432,14 @@ if (interaction.customId.startsWith("edit_mirrored_")) {
       else if (line.startsWith("Roleplay Participants:")) updatedPostData.roleplayParticipants = line.replace("Roleplay Participants:", "").trim();
     }
 
-    // Normalize participants for RP
+    // Normalize RP participants
     if (updatedPostData.type === "rp") {
       updatedPostData.participants = updatedPostData.roleplayParticipants || "";
     }
 
     // Split participants into array
     if (updatedPostData.participants) {
-      let normalized = updatedPostData.participants
+      const normalized = updatedPostData.participants
         .replace(/\s+(and)\s+/gi, ",")
         .replace(/\s*\/\s*/g, ",")
         .replace(/\s*&\s*/g, ",")
@@ -456,21 +452,23 @@ if (interaction.customId.startsWith("edit_mirrored_")) {
         .filter(p => p);
     }
 
-    // Rebuild mirrored message components
-    const { components, flags } = generatePostComponents(updatedPostData);
-
-    // Fetch target channel and message
+    // Fetch target channel and mirrored message
     const targetChannel = await client.channels.fetch(process.env.TARGET_CHANNEL_ID);
     const targetMsg = await targetChannel.messages.fetch(targetId);
 
-    // Edit the mirrored message
+    // Edit mirrored message
     await targetMsg.edit({
       content: null,
-      components,
-      flags,
+      components: generatePostComponents(updatedPostData).components,
+      flags: generatePostComponents(updatedPostData).flags,
     });
 
-    // Update the mod log message
+    // Fetch bot log message in source channel
+    let botLogMessage = null;
+    if (logMessageId) {
+      botLogMessage = await interaction.channel.messages.fetch(logMessageId).catch(() => null);
+    }
+
     const timestamp = Math.floor(Date.now() / 1000);
     const typeLabel = updatedPostData.type === "rp"
       ? "Roleplay"
@@ -479,14 +477,16 @@ if (interaction.customId.startsWith("edit_mirrored_")) {
       : "Activity";
     const postNumber = updatedPostData.postNumber ?? "N/A";
 
-    await botMessage.edit({
-      content: `_Log — Post Type: ${typeLabel} | Post Number: ${postNumber} | Edited by ${interaction.user} at <t:${timestamp}:f> | [View Post](${targetMsg.url})_`,
-      components: [createModMirroredRow(sourceMessageId)]
-    });
+    // Update bot log message if it exists
+    if (botLogMessage) {
+      await botLogMessage.edit({
+        content: `_Log — Post Type: ${typeLabel} | Post Number: ${postNumber} | Edited by ${interaction.user} at <t:${timestamp}:f> | [View Post](${targetMsg.url})_`,
+        components: [createModMirroredRow(sourceMessageId)],
+      });
+    }
 
-    // Save updated data for future edits
+    // Save updated mirrored post in DB
     await setMirroredPost(sourceMessageId, targetId, updatedPostData);
-    botMessage._mirroredData = updatedPostData;
 
     return interaction.editReply("✏️ Mirrored post edited successfully.");
   } catch (err) {
@@ -494,6 +494,7 @@ if (interaction.customId.startsWith("edit_mirrored_")) {
     return interaction.editReply("❌ Failed to edit mirrored post.");
   }
 }
+
 
   }
 }
