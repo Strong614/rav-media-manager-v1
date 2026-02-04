@@ -145,13 +145,16 @@ if (
 
 
   // 🔥 ACK IMMEDIATELY (this is the fix)
-  if (
-    interaction.customId === APPROVE_BUTTON_ID ||
-    interaction.customId === REJECT_BUTTON_ID ||
-    interaction.customId === DELETE_BUTTON_ID
-  ) {
+if (
+  interaction.customId === APPROVE_BUTTON_ID ||
+  interaction.customId === DELETE_BUTTON_ID ||
+  interaction.customId === REJECT_BUTTON_ID
+) {
+  // ❗ BUT only deferUpdate for APPROVE / DELETE
+  if (interaction.customId !== REJECT_BUTTON_ID) {
     await interaction.deferUpdate();
   }
+}
 
   const botMessage = interaction.message;
 
@@ -240,25 +243,41 @@ if (interaction.customId === APPROVE_BUTTON_ID) {
       : "Activity";
   const postNumber = postData.postNumber ?? "N/A";
 
-  await botMessage.edit({
-    content: `_Log — Post Type: ${typeLabel} | Post Number: ${postNumber} | Approved by ${interaction.user} at <t:${timestamp}:f> | [View Post](${publishedMessage.url})_`,
-    // ✅ Pass SOURCE post ID so mod buttons work
-    components: [createModMirroredRow(sourceMessage.id)]
-  });
+const updatedLog = await botMessage.edit({
+  content: `_Log — Post Type: ${typeLabel} | Post Number: ${postNumber} | Approved by ${interaction.user} at <t:${timestamp}:f> | [View Post](${publishedMessage.url})_`,
+  components: [createModMirroredRow(sourceMessage.id)]
+});
 
-  // ✅ DB key = SOURCE post ID (correct)
-  await setMirroredPost(sourceMessage.id, publishedMessage.id, postData);
+await setMirroredPost(
+  sourceMessage.id,
+  publishedMessage.id,
+  {
+    ...postData,
+    logMessageId: updatedLog.id
+  }
+);
+
 
   return;
 }
 
-/* ───────── REJECT ───────── */
+/* ───────── REJECT (SHOW MODAL) ───────── */
 if (interaction.customId === REJECT_BUTTON_ID) {
-  await botMessage.edit({
-    content: "❌ Post rejected. Media Manager can delete it.",
-    components: [createDeleteRow()]
-  });
-  return;
+  const modal = new ModalBuilder()
+    .setCustomId(`reject_modal_${sourceMessage.id}`)
+    .setTitle("Reject Post");
+
+  const reasonInput = new TextInputBuilder()
+    .setCustomId("reject_reason")
+    .setLabel("Reason for rejection")
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(true);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(reasonInput)
+  );
+
+  return interaction.showModal(modal); // ❌ no defer before this
 }
 
 /* ───────── DELETE (SHOW MODAL) ───────── */
@@ -353,43 +372,54 @@ if (interaction.customId.startsWith(EDIT_BUTTON_ID)) {
 
   // ───────── MODAL SUBMISSION ─────────
   if (interaction.type === InteractionType.ModalSubmit) {
-    // DELETE modal (existing logic)
-    if (interaction.customId.startsWith("delete_modal_")) {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const messageId = interaction.customId.replace("delete_modal_", "");
-      const note = interaction.fields.getTextInputValue("delete_note");
-      const channel = interaction.channel;
+    /* ───────── REJECT MODAL SUBMISSION ───────── */
+if (interaction.customId.startsWith("reject_modal_")) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-      const sourceMessage = await channel.messages.fetch(messageId).catch(() => null);
-      if (!sourceMessage) return interaction.editReply("❌ Original post not found.");
-      await sourceMessage.delete().catch(() => {});
+  const sourceId = interaction.customId.replace("reject_modal_", "");
+  const reason = interaction.fields.getTextInputValue("reject_reason");
 
-      const messages = await channel.messages.fetch({ limit: 20 });
-      const moderationMessage = messages.find(
-        m =>
-          m.author.id === interaction.client.user.id &&
-          m.reference?.messageId === messageId
-      );
-      if (moderationMessage) await moderationMessage.edit({ content: `Post was deleted by ${interaction.user}.`, components: [] });
+  const channel = interaction.channel;
+  const sourceMessage = await channel.messages.fetch(sourceId).catch(() => null);
+  if (!sourceMessage) {
+    return interaction.editReply("❌ Original post not found.");
+  }
 
-      try {
-        const postType = detectPostType(sourceMessage.content);
-        const embed = new EmbedBuilder()
-          .setTitle("📝 Post Deleted")
-          .setDescription(`Your ${postType} post was deleted by **${interaction.member.displayName}**.`)
-          .addFields({ name: "Reason", value: note || "No reason provided" })
-          .setColor(0xA2C6CA)
-          .setTimestamp()
-          .setFooter({ text: "Please review the post format before submitting again." });
+  // 🗑️ DELETE SOURCE POST
+  await sourceMessage.delete().catch(() => {});
 
-        await sourceMessage.author.send({ embeds: [embed] });
-      } catch (err) {
-        console.warn(`Could not DM ${sourceMessage.author.tag}:`, err.message);
-      }
+  // 📝 UPDATE MOD LOG MESSAGE
+  const messages = await channel.messages.fetch({ limit: 20 });
+  const modMessage = messages.find(
+    m =>
+      m.author.id === interaction.client.user.id &&
+      m.reference?.messageId === sourceId
+  );
 
-      return interaction.editReply("✅ Post deleted and moderation message updated.");
+  if (modMessage) {
+    await modMessage.edit({
+      content: `❌ **Post Rejected** by ${interaction.user}\n**Reason:** ${reason}`,
+      components: []
+    });
+  }
 
-    }
+  // 📩 DM USER
+  try {
+    const embed = new EmbedBuilder()
+      .setTitle("❌ Post Rejected")
+      .setDescription("Your post was rejected by the media team.")
+      .addFields({ name: "Reason", value: reason })
+      .setColor(0xff4d4d)
+      .setTimestamp();
+
+    await sourceMessage.author.send({ embeds: [embed] });
+  } catch (err) {
+    console.warn("Failed to DM user:", err.message);
+  }
+
+  return interaction.editReply("✅ Post rejected, deleted, and user notified.");
+}
+
 
     // ───────── NEW: Edit Mirrored Modal Submission ─────────
 
