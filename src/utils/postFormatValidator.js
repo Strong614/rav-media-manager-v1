@@ -62,20 +62,29 @@ export async function enforcePostFormat(message, autoDeleted = false) {
   if (missingOrEmpty.length > 0) {
     try {
       const footerText = autoDeleted
-        ? `Please fix these fields and re-submit your post`
-        : `Your post will still be reviewed by a Media Manager, but please fix these fields for future submissions.`;
+        ? "Please fix these fields and re-submit your post."
+        : "Your post will still be reviewed by a Media Manager, but please fix these fields for future submissions.";
+
+      // Build the DM content safely using template literals
+      const dmContent = `
+<@${message.author.id}>, your **${type}** post has invalid or missing fields:
+${missingOrEmpty.map(f => `- ${f}`).join("\n")}
+
+📋 **Correct format:**
+\`\`\`
+${TEMPLATE[type]}
+\`\`\`
+
+**Example:**
+\`\`\`
+${EXAMPLES[type]}
+\`\`\`
+
+${footerText}
+      `;
 
       // DM the user
-      await message.author.send(
-        `<@${message.author.id}>, your ${type} post has invalid or missing fields:\n` +
-        `${missingOrEmpty.map(f => `- ${f}`).join("\n")}\n\n` +
-        `📋 **Correct format:**\n` +
-        "```" + TEMPLATE[type] + "```\n\n" +
-        `**Example:**\n` +
-        "```" + EXAMPLES[type] + "```\n` +
-        `${footerText}`
-      );
-
+      await message.author.send(dmContent);
       console.log(`DM sent to ${message.author.tag} for invalid ${type} format.`);
 
       // ✅ Delete the message automatically if autoDeleted = true
