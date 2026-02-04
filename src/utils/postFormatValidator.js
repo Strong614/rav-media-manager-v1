@@ -35,12 +35,11 @@ export function checkPostFormat(content) {
   const type = detectPostType(content);
   const required = REQUIRED_FIELDS[type];
 
-  const lines = content.split("\n").map(l => l.trim());
+  const lines = content.split("\n");
   const missingOrEmpty = [];
 
   for (const field of required) {
-    // Find line that starts exactly with the required field
-    const line = lines.find(l => l === field || l.startsWith(field));
+    const line = lines.find(l => l.startsWith(field));
     if (!line) {
       missingOrEmpty.push(field);
     } else {
