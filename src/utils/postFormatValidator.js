@@ -55,6 +55,7 @@ export function checkPostFormat(content) {
 
 
 // Main validator
+// utils/enforcePostFormat.js
 export async function enforcePostFormat(message, autoDeleted = false) {
   const { type, missingOrEmpty } = checkPostFormat(message.content);
 
@@ -64,17 +65,24 @@ export async function enforcePostFormat(message, autoDeleted = false) {
         ? `Please fix these fields and re-submit your post`
         : `Your post will still be reviewed by a Media Manager, but please fix these fields for future submissions.`;
 
+      // DM the user
       await message.author.send(
         `<@${message.author.id}>, your ${type} post has invalid or missing fields:\n` +
         `${missingOrEmpty.map(f => `- ${f}`).join("\n")}\n\n` +
         `📋 **Correct format:**\n` +
         "```" + TEMPLATE[type] + "```\n\n" +
         `**Example:**\n` +
-        "```" + EXAMPLES[type] + "```\n" +
+        "```" + EXAMPLES[type] + "```\n` +
         `${footerText}`
       );
 
       console.log(`DM sent to ${message.author.tag} for invalid ${type} format.`);
+
+      // ✅ Delete the message automatically if autoDeleted = true
+      if (autoDeleted) {
+        await message.delete().catch(() => {});
+        console.log(`Deleted message from ${message.author.tag} due to invalid format.`);
+      }
     } catch (err) {
       console.warn(`Could not DM ${message.author.tag}:`, err.message);
     }
