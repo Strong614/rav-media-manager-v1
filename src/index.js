@@ -139,17 +139,36 @@ client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
   if (message.channelId !== process.env.SOURCE_CHANNEL_ID) return;
 
+  // ----------------------------
+  // 1️⃣ Auto-reject misformatted posts
+  // ----------------------------
+  const { enforcePostFormat } = await import("./utils/postFormatValidator.js");
+
+  const isValid = await enforcePostFormat(message, true); // true = autoDeleted
+
+  if (!isValid) {
+    console.log(`Deleted misformatted post from ${message.author.tag} (ID: ${message.id})`);
+    return; // Stop further processing
+  }
+
+  // ----------------------------
+  // 2️⃣ Record leaderboard and activity stats
+  // ----------------------------
   try {
     const postData = parsePostData(message);
-    recordPost(postData);           // Leaderboard stats
+    recordPost(postData); // Leaderboard stats
     const monthKey = getCurrentRavMonthKey(message.createdAt);
-    recordActivityPost(postData, monthKey);   // Activity stats
+    recordActivityPost(postData, monthKey); // Activity stats
   } catch (err) {
     console.warn(`[DEBUG] Failed to record message ${message.id}:`, err);
   }
 
-  handleMessage(message); // existing handler
+  // ----------------------------
+  // 3️⃣ Call your existing message handler
+  // ----------------------------
+  handleMessage(message);
 });
+
 
 client.on("interactionCreate", handleInteraction);
 
