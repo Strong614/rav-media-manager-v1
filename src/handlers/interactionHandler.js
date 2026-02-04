@@ -217,18 +217,29 @@ if (!sourceMessage) {
   });
 }
 
-
 /* ───────── APPROVE ───────── */
 if (interaction.customId === APPROVE_BUTTON_ID) {
 
+  const sourceMsg = sourceMessage; // for clarity
+
+  // ✅ Enforce strict post format before approving
+  const isValid = await enforcePostFormat(sourceMsg, false);
+  if (!isValid) {
+    return interaction.editReply({
+      content: `❌ Post format invalid. The user has been notified to fix it.`,
+      components: []
+    });
+  }
+
+  // Disable buttons immediately
   if (botMessage.components.length) {
     await botMessage.edit({
       components: disableButtons(botMessage)
     });
   }
 
-  const postData = parsePostData(sourceMessage);
-  recordPost(sourceMessage.author.id, postData);
+  const postData = parsePostData(sourceMsg);
+  recordPost(sourceMsg.author.id, postData);
 
   const { components, flags } = generatePostComponents(postData);
   const targetChannel = await client.channels.fetch(process.env.TARGET_CHANNEL_ID);
@@ -243,23 +254,23 @@ if (interaction.customId === APPROVE_BUTTON_ID) {
       : "Activity";
   const postNumber = postData.postNumber ?? "N/A";
 
-const updatedLog = await botMessage.edit({
-  content: `_Log — Post Type: ${typeLabel} | Post Number: ${postNumber} | Approved by ${interaction.user} at <t:${timestamp}:f> | [View Post](${publishedMessage.url})_`,
-  components: [createModMirroredRow(sourceMessage.id)]
-});
+  const updatedLog = await botMessage.edit({
+    content: `_Log — Post Type: ${typeLabel} | Post Number: ${postNumber} | Approved by ${interaction.user} at <t:${timestamp}:f> | [View Post](${publishedMessage.url})_`,
+    components: [createModMirroredRow(sourceMsg.id)]
+  });
 
-await setMirroredPost(
-  sourceMessage.id,
-  publishedMessage.id,
-  {
-    ...postData,
-    logMessageId: updatedLog.id
-  }
-);
-
+  await setMirroredPost(
+    sourceMsg.id,
+    publishedMessage.id,
+    {
+      ...postData,
+      logMessageId: updatedLog.id
+    }
+  );
 
   return;
 }
+
 
 /* ───────── REJECT (SHOW MODAL) ───────── */
 if (interaction.customId === REJECT_BUTTON_ID) {
