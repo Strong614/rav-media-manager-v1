@@ -30,15 +30,17 @@ export function detectPostType(content) {
 }
 
 // Check for missing or placeholder fields
+
 export function checkPostFormat(content) {
   const type = detectPostType(content);
   const required = REQUIRED_FIELDS[type];
 
-  const lines = content.split("\n");
+  const lines = content.split("\n").map(l => l.trim());
   const missingOrEmpty = [];
 
   for (const field of required) {
-    const line = lines.find(l => l.startsWith(field));
+    // Find line that starts exactly with the required field
+    const line = lines.find(l => l === field || l.startsWith(field));
     if (!line) {
       missingOrEmpty.push(field);
     } else {
@@ -51,6 +53,7 @@ export function checkPostFormat(content) {
 
   return { type, missingOrEmpty };
 }
+
 
 // Main validator
 export async function enforcePostFormat(message, autoDeleted = false) {
