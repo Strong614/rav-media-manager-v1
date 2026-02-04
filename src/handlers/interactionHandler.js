@@ -407,7 +407,7 @@ if (interaction.customId.startsWith("reject_modal_")) {
   try {
     const embed = new EmbedBuilder()
       .setTitle("❌ Post Rejected")
-      .setDescription("Your post was rejected by the media team.")
+      .setDescription(`Your post was rejected by ${interaction.user}.`)
       .addFields({ name: "Reason", value: reason })
       .setColor(0xff4d4d)
       .setTimestamp();
