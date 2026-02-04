@@ -219,27 +219,41 @@ if (!sourceMessage) {
 
 /* ───────── APPROVE ───────── */
 if (interaction.customId === APPROVE_BUTTON_ID) {
+  const sourceMessage = botMessage.reference
+    ? await interaction.channel.messages
+        .fetch(botMessage.reference.messageId)
+        .catch(() => null)
+    : null;
 
-  const sourceMsg = sourceMessage; // for clarity
-
-  // ✅ Enforce strict post format before approving
-  const isValid = await enforcePostFormat(sourceMsg, false);
-  if (!isValid) {
+  if (!sourceMessage) {
     return interaction.editReply({
-      content: `❌ Post format invalid. The user has been notified to fix it.`,
+      content: "❌ Original post not found.",
       components: []
     });
   }
 
-  // Disable buttons immediately
+  // 1️⃣ Enforce post format first
+  const isValid = await enforcePostFormat(sourceMessage, true); // true = autoDeleted
+
+  if (!isValid) {
+    // ❌ Format wrong → auto-reject & delete
+    await sourceMessage.delete().catch(() => {});
+
+    return interaction.editReply({
+      content: "❌ Post format is invalid and has been auto-rejected. The user has been notified.",
+      components: []
+    });
+  }
+
+  // 2️⃣ If valid → proceed to approve
   if (botMessage.components.length) {
     await botMessage.edit({
       components: disableButtons(botMessage)
     });
   }
 
-  const postData = parsePostData(sourceMsg);
-  recordPost(sourceMsg.author.id, postData);
+  const postData = parsePostData(sourceMessage);
+  recordPost(sourceMessage.author.id, postData);
 
   const { components, flags } = generatePostComponents(postData);
   const targetChannel = await client.channels.fetch(process.env.TARGET_CHANNEL_ID);
@@ -256,11 +270,11 @@ if (interaction.customId === APPROVE_BUTTON_ID) {
 
   const updatedLog = await botMessage.edit({
     content: `_Log — Post Type: ${typeLabel} | Post Number: ${postNumber} | Approved by ${interaction.user} at <t:${timestamp}:f> | [View Post](${publishedMessage.url})_`,
-    components: [createModMirroredRow(sourceMsg.id)]
+    components: [createModMirroredRow(sourceMessage.id)]
   });
 
   await setMirroredPost(
-    sourceMsg.id,
+    sourceMessage.id,
     publishedMessage.id,
     {
       ...postData,
@@ -270,6 +284,7 @@ if (interaction.customId === APPROVE_BUTTON_ID) {
 
   return;
 }
+
 
 
 /* ───────── REJECT (SHOW MODAL) ───────── */
