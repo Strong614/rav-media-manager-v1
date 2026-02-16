@@ -113,7 +113,7 @@ client.once("ready", async () => {
       // Record messages individually with correct monthKey
       for (const msg of messages.values()) {
         try {
-          const postData = parsePostData(msg);
+          const postData = await parsePostData(msg); // ✅ Added await
           recordPostsFromMessages([msg]); // Leaderboard stats
           const monthKey = getCurrentRavMonthKey(msg.createdAt);
           recordActivityPost(postData, monthKey); // Activity stats
@@ -155,7 +155,7 @@ client.on("messageCreate", async (message) => {
   // 2️⃣ Record leaderboard and activity stats
   // ----------------------------
   try {
-    const postData = parsePostData(message);
+    const postData = await parsePostData(message); // ✅ Added await
     recordPost(postData); // Leaderboard stats
     const monthKey = getCurrentRavMonthKey(message.createdAt);
     recordActivityPost(postData, monthKey); // Activity stats

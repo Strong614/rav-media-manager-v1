@@ -55,12 +55,12 @@ export function recordActivityPost(postData, monthKey) {
 }
 
 /* ───────── Bulk Recording ───────── */
-export function recordActivityFromMessages(messages, { reset = false } = {}) {
+export async function recordActivityFromMessages(messages, { reset = false } = {}) { // ✅ Made async
   const initializedMonths = new Set();
 
-  messages.forEach(msg => {
+  for (const msg of messages) { // ✅ Changed to for...of
     try {
-      const postData = parsePostData(msg);
+      const postData = await parsePostData(msg); // ✅ Added await
       const monthKey = getCurrentRavMonthKey(msg.createdAt);
 
       if (
@@ -79,7 +79,7 @@ export function recordActivityFromMessages(messages, { reset = false } = {}) {
     } catch (err) {
       console.warn(`[DEBUG] Failed to record message ${msg.id}:`, err);
     }
-  });
+  }
 }
 
 
@@ -106,4 +106,3 @@ export function getRavMonthRange(monthKey) {
 
   return { start, end };
 }
-

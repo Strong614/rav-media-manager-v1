@@ -88,11 +88,11 @@ export function recordPost(postData, date = new Date()) {
 /**
  * Bulk record from messages
  */
-export function recordPostsFromMessages(messages) {
-  messages.forEach(msg => {
-    const postData = parsePostData(msg);
+export async function recordPostsFromMessages(messages) { // ✅ Made async
+  for (const msg of messages) { // ✅ Changed to for...of
+    const postData = await parsePostData(msg); // ✅ Added await
     recordPost(postData, msg.createdAt);
-  });
+  }
 }
 
 /**

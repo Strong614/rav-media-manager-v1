@@ -1,4 +1,7 @@
-export function parsePostData(message) {
+import { matchParticipantName } from "./nameMatcher.js";
+
+// Make this function async now
+export async function parsePostData(message) {
   const lines = message.content.split("\n").map(l => l.trim());
   const postData = {
     postNumber: "",
@@ -46,8 +49,8 @@ export function parsePostData(message) {
       postData.activityType = line.replace("Activity type:", "").trim();
     if (line.startsWith("Event Type:")) postData.eventType = line.replace("Event Type:", "").trim();
     if (line.startsWith("Event Price:")) postData.eventPrice = line.replace("Event Price:", "").trim();
-    if (line.startsWith("Host:")) postData.host = capitalizeFirstLetter(line.replace("Host:", "").trim());
-    if (line.startsWith("Winner:")) postData.winner = capitalizeFirstLetter(line.replace("Winner:", "").trim());
+    if (line.startsWith("Host:")) postData.host = line.replace("Host:", "").trim();
+    if (line.startsWith("Winner:")) postData.winner = line.replace("Winner:", "").trim();
     if (line.startsWith("Roleplay Story:")) postData.story = line.replace("Roleplay Story:", "").trim();
   }
 
@@ -56,7 +59,7 @@ export function parsePostData(message) {
     postData.participants = postData.roleplayParticipants || "";
   }
 
-  // Split participants robustly + normalize capitalization
+  // Split participants robustly + fuzzy match names
   if (postData.participants) {
     const normalized = postData.participants
       .replace(/\s+(and)\s+/gi, ",")       // "and" → ","
@@ -65,17 +68,29 @@ export function parsePostData(message) {
       .replace(/\s{2,}/g, " ")              // collapse spaces
       .trim();
     
-    postData.participantsArray = normalized
+    const rawNames = normalized
       .split(",")
       .map(p => p.trim())
-      .filter(p => p)
-      .map(p => capitalizeFirstLetter(p)); // 👈 Normalize capitalization
+      .filter(p => p);
+    
+    // Fuzzy match all participant names (async)
+    postData.participantsArray = await Promise.all(
+      rawNames.map(p => matchParticipantName(p))
+    );
+  }
+
+  // Fuzzy match host and winner
+  if (postData.host) {
+    postData.host = await matchParticipantName(postData.host);
+  }
+  if (postData.winner) {
+    postData.winner = await matchParticipantName(postData.winner);
   }
 
   return postData;
 }
 
-// Helper function to capitalize first letter of each word
+// Helper function to capitalize first letter of each word (kept for backward compatibility)
 function capitalizeFirstLetter(str) {
   return str
     .split(" ")
