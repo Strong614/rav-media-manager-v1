@@ -73,10 +73,12 @@ export function recordPost(postData, date = new Date()) {
     (postData.participantsArray || []).forEach(uid => incrementContributor(uid, "misc"));
     break;
 
-  case "event":
+  case "event": {
     incrementAuthor(postData.authorId);
-    incrementContributor(postData.host || postData.authorId, "event");
+    const hosts = postData.hostArray?.length ? postData.hostArray : [postData.host || postData.authorId];
+    hosts.forEach(h => incrementContributor(h, "event"));
     break;
+  }
 
   default:
     incrementAuthor(postData.authorId);

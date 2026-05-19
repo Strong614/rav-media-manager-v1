@@ -39,15 +39,24 @@ function capitalizeFirstLetter(str) {
     .join(" ");
 }
 
+let _nameCache = null;
+let _nameCacheExpiry = 0;
+const NAME_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 // Main matching function
 export async function matchParticipantName(input) {
   if (!input || input.trim() === "") return "";
-  
+
   // Clean special characters first
   const cleaned = cleanInput(input);
   if (!cleaned) return capitalizeFirstLetter(input);
-  
-  const KNOWN_NAMES = await getMemberNames();
+
+  const now = Date.now();
+  if (!_nameCache || now > _nameCacheExpiry) {
+    _nameCache = await getMemberNames();
+    _nameCacheExpiry = now + NAME_CACHE_TTL;
+  }
+  const KNOWN_NAMES = _nameCache;
   const inputLower = cleaned.toLowerCase().trim();
   
   // 1. Exact match (case-insensitive)

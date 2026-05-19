@@ -44,14 +44,6 @@ export function recordActivityPost(postData, monthKey) {
     if (!monthStats.users[p]) monthStats.users[p] = { misc: 0, event: 0, roleplay: 0, raid: 0, activity: 0 };
     monthStats.users[p][category] += 1;
   }
-
-  // Update total
-  monthStats.all.activity =
-  ["misc", "event", "roleplay", "raid"].reduce(
-    (sum, k) => sum + monthStats.all[k],
-    0
-  );
-
 }
 
 /* ───────── Bulk Recording ───────── */

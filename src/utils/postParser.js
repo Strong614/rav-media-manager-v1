@@ -79,10 +79,19 @@ export async function parsePostData(message) {
     );
   }
 
-  // Fuzzy match host and winner
+  // Split and fuzzy match host and winner the same way as participants
   if (postData.host) {
-    postData.host = await matchParticipantName(postData.host);
+    const normalized = postData.host
+      .replace(/\s+(and)\s+/gi, ",")
+      .replace(/\s*\/\s*/g, ",")
+      .replace(/\s*&\s*/g, ",")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    const rawHosts = normalized.split(",").map(p => p.trim()).filter(p => p);
+    postData.hostArray = await Promise.all(rawHosts.map(p => matchParticipantName(p)));
+    postData.host = postData.hostArray.join(", ");
   }
+
   if (postData.winner) {
     postData.winner = await matchParticipantName(postData.winner);
   }

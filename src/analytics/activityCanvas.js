@@ -40,10 +40,10 @@ export async function generateActivityImage(stats, monthKey) {
 
   /* ───── Data prep ───── */
   const entries = [
-    { label: "Misc", value: stats.misc },
-    { label: "Events", value: stats.event },
-    { label: "Roleplays", value: stats.roleplay },
-    { label: "Raids", value: stats.raid }
+    { label: "Misc", value: stats.misc || 0 },
+    { label: "Events", value: stats.event || 0 },
+    { label: "Roleplays", value: stats.roleplay || 0 },
+    { label: "Raids", value: stats.raid || 0 }
   ];
 
   entries.sort((a, b) => b.value - a.value);
@@ -90,15 +90,21 @@ export async function generateActivityImage(stats, monthKey) {
     ctx.shadowBlur = e.value === maxValue ? 18 : 10;
     ctx.shadowOffsetY = 5;
 
-    ctx.beginPath();
-    ctx.roundRect(x, y, barWidth, barHeight, 8);
-    ctx.fill();
+    if (barHeight > 0) {
+      ctx.beginPath();
+      ctx.roundRect(x, y, barWidth, barHeight, 8);
+      ctx.fill();
+    }
+
+    // Reset shadow fully so it doesn't bleed onto text/lines
     ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
 
     ctx.fillStyle = "#fff";
     ctx.font = "bold 22px 'Times New Roman'";
     ctx.textAlign = "center";
-    ctx.fillText(e.value, x + barWidth / 2, y - 10);
+    if (e.value > 0) ctx.fillText(e.value, x + barWidth / 2, y - 10);
 
     ctx.save();
     ctx.translate(x + barWidth / 2, baseY + 52);

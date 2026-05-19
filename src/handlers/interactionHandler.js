@@ -27,15 +27,19 @@ import {
 import { EmbedBuilder } from "discord.js";
 import { generatePostComponents } from "../formatting/postComponents.js";
 import { client } from "../client.js";
-import { recordPost } from "../analytics/analyticsStore.js"; 
 import { ravLeaderboardCommand } from "../commands/ravLeaderboard.js";
 import { ravActivityCommand } from "../commands/rav-activity.js";
-import { enforcePostFormat } from "../utils/postFormatValidator.js"; 
+import { enforcePostFormat } from "../utils/postFormatValidator.js";
 import { TEMPLATE, EXAMPLES, detectPostType } from "../utils/postFormatValidator.js";
-
 import { setMirroredPost, getMirroredPost, deleteMirroredPost } from "../storage/mirroredPosts.js";
+import { recordPost } from "../analytics/analyticsStore.js";
+import { recordActivityPost, getCurrentRavMonthKey } from "../analytics/activityStats.js";
+import { parsePostData } from "../utils/postParser.js";
 
 const MEDIA_MANAGER_ROLE = "Media Manager";
+
+// Prevents two simultaneous approvals of the same post
+const pendingApprovals = new Set();
 
 
 // Helper to disable buttons (your existing code)
@@ -52,72 +56,6 @@ function disableButtons(message) {
     return newRow;
   });
 }
-
-// Parse post data (your existing code)
-function parsePostData(message) {
-  const lines = message.content.split("\n");
-  const postData = {};
-  let postType;
-
-  // Determine post type
-  if (lines.some(line => line.startsWith("Roleplay Story:"))) {
-    postType = "rp";
-  } else if (lines.some(line => line.startsWith("Event Type:"))) {
-    postType = "event";
-  } else {
-    postType = "activity";
-  }
-
-  for (const line of lines) {
-    if (!postData.postNumber && line.startsWith("Post Number:")) {
-      postData.postNumber = line.replace("Post Number:", "").trim();
-    }
-
-    if (!postData.date && line.startsWith("Date:")) {
-      postData.date = line.replace("Date:", "").trim();
-    }
-
-    if (!postData.activityType && line.startsWith("Activity type:")) {
-      postData.activityType = line.replace("Activity type:", "").trim();
-    }
-
-    if (!postData.participants && line.startsWith("Participants:")) {
-      postData.participants = line.replace("Participants:", "").trim();
-    }
-
-    if (!postData.eventType && line.startsWith("Event Type:")) {
-      postData.eventType = line.replace("Event Type:", "").trim();
-    }
-
-    if (!postData.eventPrice && line.startsWith("Event Price:")) {
-      postData.eventPrice = line.replace("Event Price:", "").trim();
-    }
-
-    if (!postData.host && line.startsWith("Host:")) {
-      postData.host = line.replace("Host:", "").trim();
-    }
-
-    if (!postData.winner && line.startsWith("Winner:")) {
-      postData.winner = line.replace("Winner:", "").trim();
-    }
-
-    // Roleplay-specific
-    if (!postData.story && line.startsWith("Roleplay Story:")) {
-      postData.story = line.replace("Roleplay Story:", "").trim();
-    }
-
-    if (!postData.participants && line.startsWith("Roleplay Participants:")) {
-      postData.participants = line.replace("Roleplay Participants:", "").trim();
-    }
-  }
-
-  postData.type = postType;
-  postData.screenshotUrls = [...message.attachments.values()].map(a => a.url);
-  postData.authorId = message.author.id;
-
-  return postData;
-}
-
 
 // Main interaction handler
 export async function handleInteraction(interaction) {
@@ -232,6 +170,17 @@ if (interaction.customId === APPROVE_BUTTON_ID) {
     });
   }
 
+  // Guard: already approved or currently being approved by another mod
+  const alreadyApproved = await getMirroredPost(sourceMessage.id);
+  if (alreadyApproved?.mirroredId) {
+    return interaction.followUp({ content: "⚠️ This post has already been approved.", flags: MessageFlags.Ephemeral });
+  }
+  if (pendingApprovals.has(sourceMessage.id)) {
+    return interaction.followUp({ content: "⚠️ This post is already being processed.", flags: MessageFlags.Ephemeral });
+  }
+  pendingApprovals.add(sourceMessage.id);
+
+  try {
   // 1️⃣ Enforce post format first
   const isValid = await enforcePostFormat(sourceMessage, true); // true = autoDeleted
 
@@ -252,8 +201,10 @@ if (interaction.customId === APPROVE_BUTTON_ID) {
     });
   }
 
-  const postData = parsePostData(sourceMessage);
-  recordPost(sourceMessage.author.id, postData);
+  const postData = await parsePostData(sourceMessage);
+  recordPost(postData, sourceMessage.createdAt);
+  const monthKey = getCurrentRavMonthKey(sourceMessage.createdAt);
+  recordActivityPost(postData, monthKey);
 
   const { components, flags } = generatePostComponents(postData);
   const targetChannel = await client.channels.fetch(process.env.TARGET_CHANNEL_ID);
@@ -283,6 +234,9 @@ if (interaction.customId === APPROVE_BUTTON_ID) {
   );
 
   return;
+  } finally {
+    pendingApprovals.delete(sourceMessage.id);
+  }
 }
 
 

@@ -8,17 +8,9 @@ import { ravLeaderboardCommand } from "./commands/ravLeaderboard.js";
 import { ravActivityCommand } from "./commands/rav-activity.js";
 
 import { REST, Routes, ActivityType } from "discord.js";
-import { recordPostsFromMessages } from "./analytics/analyticsStore.js";
-import {
-  recordActivityFromMessages,
-  recordActivityPost,
-  getCurrentRavMonthKey
-} from "./analytics/activityStats.js";
-
 import { recordPost } from "./analytics/analyticsStore.js";
-import { parsePostData } from "./utils/postParser.js";
-
-import { initMirroredDb } from "./storage/mirroredPosts.js";
+import { recordActivityPost, getCurrentRavMonthKey } from "./analytics/activityStats.js";
+import { initMirroredDb, mirroredDb } from "./storage/mirroredPosts.js";
 
 // ----------------------------
 // Global error logging
@@ -81,54 +73,32 @@ client.once("ready", async () => {
   }
 
   // ----------------------------
-  // Robust historical fetch
+  // Rebuild stats from approved posts (mirroredPosts.json)
+  // Much faster than fetching from Discord — no API calls, no DB queries
   // ----------------------------
   try {
-    const sourceChannel = await client.channels.fetch(process.env.SOURCE_CHANNEL_ID);
-    let lastId = undefined;
-    let hasMore = true;
+    await mirroredDb.read();
+    const posts = Object.entries(mirroredDb.data?.posts || {});
+    let rebuilt = 0;
 
-    while (hasMore) {
-      let messages;
-      let retryCount = 0;
-      const maxRetries = 5;
-
-      while (retryCount < maxRetries) {
-        try {
-          messages = await sourceChannel.messages.fetch({ limit: 50, before: lastId });
-          break;
-        } catch (err) {
-          retryCount++;
-          console.warn(`[WARN] Failed to fetch messages (attempt ${retryCount}):`, err);
-          await new Promise(res => setTimeout(res, 1500));
-          if (retryCount === maxRetries) throw err;
-        }
+    for (const [sourceId, mapping] of posts) {
+      if (!mapping?.postData) continue;
+      try {
+        // Derive creation date from Discord snowflake ID (no API call needed)
+        const messageTimestamp = Number(BigInt(sourceId) >> 22n) + 1420070400000;
+        const messageDate = new Date(messageTimestamp);
+        const monthKey = getCurrentRavMonthKey(messageDate);
+        recordPost(mapping.postData, messageDate);
+        recordActivityPost(mapping.postData, monthKey);
+        rebuilt++;
+      } catch (err) {
+        console.warn(`[STARTUP] Failed to rebuild stats for ${sourceId}:`, err);
       }
-
-      if (!messages || messages.size === 0) {
-        hasMore = false;
-        break;
-      }
-
-      // Record messages individually with correct monthKey
-      for (const msg of messages.values()) {
-        try {
-          const postData = await parsePostData(msg); // ✅ Added await
-          recordPostsFromMessages([msg]); // Leaderboard stats
-          const monthKey = getCurrentRavMonthKey(msg.createdAt);
-          recordActivityPost(postData, monthKey); // Activity stats
-        } catch (err) {
-          console.warn(`[DEBUG] Failed to record historical message ${msg.id}:`, err);
-        }
-      }
-
-      lastId = messages.last()?.id;
-      if (!lastId) hasMore = false;
     }
 
-    console.log("✅ Recorded all existing posts from source channel.");
+    console.log(`✅ Rebuilt stats from ${rebuilt} approved posts.`);
   } catch (err) {
-    console.error("❌ Error fetching historical messages:", err);
+    console.error("❌ Error rebuilding stats:", err);
   }
 });
 
@@ -152,19 +122,7 @@ client.on("messageCreate", async (message) => {
   }
 
   // ----------------------------
-  // 2️⃣ Record leaderboard and activity stats
-  // ----------------------------
-  try {
-    const postData = await parsePostData(message); // ✅ Added await
-    recordPost(postData); // Leaderboard stats
-    const monthKey = getCurrentRavMonthKey(message.createdAt);
-    recordActivityPost(postData, monthKey); // Activity stats
-  } catch (err) {
-    console.warn(`[DEBUG] Failed to record message ${message.id}:`, err);
-  }
-
-  // ----------------------------
-  // 3️⃣ Call your existing message handler
+  // 2️⃣ Call your existing message handler
   // ----------------------------
   handleMessage(message);
 });
