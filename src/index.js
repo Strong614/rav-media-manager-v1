@@ -10,7 +10,8 @@ import { ravActivityCommand } from "./commands/rav-activity.js";
 import { REST, Routes, ActivityType } from "discord.js";
 import { recordPost } from "./analytics/analyticsStore.js";
 import { recordActivityPost, getCurrentRavMonthKey } from "./analytics/activityStats.js";
-import { initMirroredDb, mirroredDb } from "./storage/mirroredPosts.js";
+import { initMirroredDb } from "./storage/mirroredPosts.js";
+import { parsePostData } from "./utils/postParser.js";
 
 // ----------------------------
 // Global error logging
@@ -73,32 +74,52 @@ client.once("ready", async () => {
   }
 
   // ----------------------------
-  // Rebuild stats from approved posts (mirroredPosts.json)
-  // Much faster than fetching from Discord — no API calls, no DB queries
+  // Rebuild stats from source channel history
   // ----------------------------
   try {
-    await mirroredDb.read();
-    const posts = Object.entries(mirroredDb.data?.posts || {});
-    let rebuilt = 0;
+    const sourceChannel = await client.channels.fetch(process.env.SOURCE_CHANNEL_ID);
+    let lastId = undefined;
+    let hasMore = true;
+    let total = 0;
 
-    for (const [sourceId, mapping] of posts) {
-      if (!mapping?.postData) continue;
-      try {
-        // Derive creation date from Discord snowflake ID (no API call needed)
-        const messageTimestamp = Number(BigInt(sourceId) >> 22n) + 1420070400000;
-        const messageDate = new Date(messageTimestamp);
-        const monthKey = getCurrentRavMonthKey(messageDate);
-        recordPost(mapping.postData, messageDate);
-        recordActivityPost(mapping.postData, monthKey);
-        rebuilt++;
-      } catch (err) {
-        console.warn(`[STARTUP] Failed to rebuild stats for ${sourceId}:`, err);
+    while (hasMore) {
+      let messages;
+      let retries = 0;
+
+      while (retries < 5) {
+        try {
+          messages = await sourceChannel.messages.fetch({ limit: 100, before: lastId });
+          break;
+        } catch (err) {
+          retries++;
+          console.warn(`[WARN] Fetch attempt ${retries} failed:`, err.message);
+          await new Promise(res => setTimeout(res, 2000));
+          if (retries === 5) throw err;
+        }
       }
+
+      if (!messages || messages.size === 0) { hasMore = false; break; }
+
+      for (const msg of messages.values()) {
+        if (msg.author.bot) continue;
+        try {
+          const postData = await parsePostData(msg);
+          const monthKey = getCurrentRavMonthKey(msg.createdAt);
+          recordPost(postData, msg.createdAt);
+          recordActivityPost(postData, monthKey);
+          total++;
+        } catch (err) {
+          console.warn(`[STARTUP] Skipped message ${msg.id}:`, err.message);
+        }
+      }
+
+      lastId = messages.last()?.id;
+      if (!lastId) hasMore = false;
     }
 
-    console.log(`✅ Rebuilt stats from ${rebuilt} approved posts.`);
+    console.log(`✅ Rebuilt stats from ${total} historical posts.`);
   } catch (err) {
-    console.error("❌ Error rebuilding stats:", err);
+    console.error("❌ Error rebuilding stats from channel:", err);
   }
 });
 
