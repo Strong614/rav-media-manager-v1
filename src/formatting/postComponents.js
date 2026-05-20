@@ -27,9 +27,10 @@ function createGallery(urls) {
 export function generatePostComponents(postData) {
   const components = [];
 
-  // Banner
-  if (BANNERS[postData.type]) {
-    const banner = createGallery([BANNERS[postData.type]]);
+  // Banner — raid and misc fall back to activity banner
+  const bannerType = (postData.type === "raid" || postData.type === "misc") ? "activity" : postData.type;
+  if (BANNERS[bannerType]) {
+    const banner = createGallery([BANNERS[bannerType]]);
     if (banner) components.push(banner);
   }
 
