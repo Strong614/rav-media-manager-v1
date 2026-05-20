@@ -59,13 +59,15 @@ function disableButtons(message) {
 
 // Main interaction handler
 export async function handleInteraction(interaction) {
+  try {
 
   // Permission check (existing)
   if (
   interaction.isButton() &&
   !interaction.member.roles.cache.some(r => r.name === MEDIA_MANAGER_ROLE)
 ) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  if (!interaction.deferred && !interaction.replied)
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   return interaction.editReply("❌ You are not allowed to perform this action (only RAV media managers).");
 }
 
@@ -78,19 +80,20 @@ if (
   interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_YES) ||
   interaction.customId.startsWith(CONFIRM_DELETE_MIRRORED_NO)
 ) {
-  await interaction.deferReply({ ephemeral: true });
+  if (!interaction.deferred && !interaction.replied)
+    await interaction.deferReply({ ephemeral: true });
 }
 
 
-  // 🔥 ACK IMMEDIATELY (this is the fix)
+  // ACK IMMEDIATELY for approve / delete
 if (
   interaction.customId === APPROVE_BUTTON_ID ||
   interaction.customId === DELETE_BUTTON_ID ||
   interaction.customId === REJECT_BUTTON_ID
 ) {
-  // ❗ BUT only deferUpdate for APPROVE / DELETE
   if (interaction.customId !== REJECT_BUTTON_ID) {
-    await interaction.deferUpdate();
+    if (!interaction.deferred && !interaction.replied)
+      await interaction.deferUpdate();
   }
 }
 
@@ -506,5 +509,13 @@ if (interaction.customId.startsWith("edit_mirrored_")) {
 }
 
 
+  }
+  } catch (err) {
+    console.error("❌ Interaction handler error:", err);
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: "❌ Something went wrong.", flags: MessageFlags.Ephemeral });
+      }
+    } catch {}
   }
 }
