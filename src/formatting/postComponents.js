@@ -41,7 +41,8 @@ export function generatePostComponents(postData) {
 
   switch (postData.type) {
     case "activity":
-    case "misc": // treat misc as activity for display
+    case "misc":
+    case "raid":
       textLines.push(`**Activity ${postData.postNumber ?? "N/A"}**`);
       textLines.push(`Type: ${postData.activityType ?? "N/A"}`);
       textLines.push(`Date: ${postData.date ?? "N/A"}`);
